@@ -75,20 +75,21 @@ def build_fusion_model():
             use_softmax=False
         )
         
-        # inject non-ideality
-        # deterministic phase bias
-        if configs.noise.phase_bias:
-            model.assign_random_phase_bias(random_state=int(configs.noise.random_state))
-        # deterministic phase shifter gamma noise
-        model.set_gamma_noise(
-            float(configs.noise.gamma_noise_std), random_state=int(configs.noise.random_state)
-        )
-        # deterministic phase shifter crosstalk
-        model.set_crosstalk_factor(float(configs.noise.crosstalk_factor))
-        # deterministic phase quantization
-        model.set_weight_bitwidth(int(configs.quantize.weight_bit))
-        # enable/disable noisy identity
-        model.set_noisy_identity(int(configs.sl.noisy_identity))
+        if configs.model.mzi_noise is True:
+            # inject non-ideality
+            # deterministic phase bias
+            if configs.noise.phase_bias:
+                model.assign_random_phase_bias(random_state=int(configs.noise.random_state))
+            # deterministic phase shifter gamma noise
+            model.set_gamma_noise(
+                float(configs.noise.gamma_noise_std), random_state=int(configs.noise.random_state)
+            )
+            # deterministic phase shifter crosstalk
+            model.set_crosstalk_factor(float(configs.noise.crosstalk_factor))
+            # deterministic phase quantization
+            model.set_weight_bitwidth(int(configs.quantize.w_bit))
+            # enable/disable noisy identity
+            model.set_noisy_identity(int(configs.sl.noisy_identity))
         
         return model
     else:
@@ -109,14 +110,14 @@ def build_fusion_dataloader():
     )
     validation_loader = torch.utils.data.DataLoader(
         dataset=validation_dataset,
-        batch_size=configs.run.batch_size,
+        batch_size=len(validation_dataset),
         shuffle=False,
         pin_memory=True,
         num_workers=configs.dataset.num_workers,
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=test_set,
-        batch_size=configs.run.batch_size,
+        batch_size=len(test_set),
         shuffle=False,
         pin_memory=True,
         num_workers=configs.dataset.num_workers,

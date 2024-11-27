@@ -4,7 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import tensorly as tl
 
-from core.tensor_layers.layers import TensorizedEmbedding
+# from core.tensor_layers.layers import TensorizedEmbedding
+from tensor_layers.layers import TensorizedEmbedding
 from .sparse_bp_ttm_mlp import TTM_Linear_module
 
 class Tensor_PFF(nn.Module):

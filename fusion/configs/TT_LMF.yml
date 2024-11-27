@@ -9,9 +9,10 @@ dataset:
   seed: 42
 
 optimizer:
-  name: adamw
-  lr: 0.002
-  weight_decay: 0.0
+  name: adam
+  factor_lr: 0.003
+  lr: 0.0005
+  weight_decay: 0.001
 
 scheduler:
   name: cosine
@@ -20,12 +21,10 @@ scheduler:
 
 run:
   n_epochs: 100
-  lr: 0.001
   model_path_dir: './tt_models/'
   signiture: 'lmf'
   patience: 50
 
-  weight_decay: 0.0001
   patience: 10
   factor: 0.1
   log_interval: 10
@@ -41,24 +40,27 @@ model:
   # input_dims: [80,36,300,20]
   input_dims: [74,35,300,20]
   hidden_dims: [32,32,64]
-  sub_out_dims: [32,32,64]
-  # sub_out_dims: [31,31,63]
+  # sub_out_dims: [32,32,64]
+  sub_out_dims: [31,31,63]
   dropouts: [0.3,0.1,0.15,0.5]
   output_dim: 2
-  rank: 4
+  rank: 8
 
   FUSION_TYPE: 'add'
   # FUSION_TYPE: 'replace'
 
-  TT_ATTN: False
+  # TT_ATTN: False
+  TT_ATTN: True
   n_layers: 2
   n_head: 3
   ATTN_rank: 4
   
-  TT_FUSION: False
+  # TT_FUSION: False
+  TT_FUSION: True
   TT_FUSION_rank: 4
 
-  TT_SUBNET: False
+  # TT_SUBNET: False
+  TT_SUBNET: True
   TT_SUBNET_rank: 4
   # tensor_type: 'TTM'
   tensor_type: 'TensorTrainMatrix'  

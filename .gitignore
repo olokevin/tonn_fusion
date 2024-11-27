@@ -20,6 +20,8 @@ __pycache__/
 fusion/data/
 fusion/tt_models/
 fusion/tt_runs/
+fusion/models/
+fusion/results/
 
 # C extensions
 *.so

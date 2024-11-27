@@ -6,10 +6,10 @@ dataset:
   batch_size: 32
   num_workers: 4
   shuffle: True
-  seed: 42
+  seed: 0
 
 optimizer:
-  name: adamw
+  name: adam
   factor_lr: 0.003
   lr: 0.0005
   weight_decay: 0.001
@@ -39,10 +39,10 @@ model:
 
   # input_dims: [80,36,300,20]
   input_dims: [74,35,300,20]
-  # hidden_dims: [8,4,64]
-  # sub_out_dims: [8,4,32]
-  hidden_dims: [32,32,64]
-  sub_out_dims: [32,32,64]
+  hidden_dims: [8,4,64]
+  sub_out_dims: [8,4,32]
+  # hidden_dims: [32,32,64]
+  # sub_out_dims: [32,32,64]
   dropouts: [0.3,0.1,0.15,0.5]
   output_dim: 2
   rank: 8

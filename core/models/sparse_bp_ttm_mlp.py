@@ -21,13 +21,10 @@ from .layers.activation import ReLUN
 from .layers.custom_linear import MZIBlockLinear
 from .sparse_bp_base import SparseBP_Base
 
-from core.tensor_layers.emb_utils import get_cum_prod,tensorized_lookup
-
 # LowRankTensor
 from abc import abstractmethod, ABC
 import torch.distributions as td
 Parameter = torch.nn.Parameter
-from core.tensor_layers.truncated_normal import TruncatedNormal
 
 __all__ = ["TTM_Linear_module", "TTM_LinearBlock","SparseBP_MZI_TTM_MLP"]
 

@@ -15,6 +15,8 @@
         "CUDA_VISIBLE_DEVICES": "0"
       },
       "args": ["configs/LMF.yml"],
+      // "args": ["configs/TT_LMF.yml"],
+      // "args": ["configs/TOMFUN.yml"],
       "justMyCode": true
     },
     {

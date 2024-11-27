@@ -251,6 +251,9 @@ class MZIBlockLinear(torch.nn.Module):
 
         self.reset_parameters()
 
+    def __repr__(self):
+        return f"MZIBlockLinear({self.in_channel}, {self.out_channel})"
+    
     def build_parameters(self, mode: str = "weight") -> None:
         # weight mode
         weight = (

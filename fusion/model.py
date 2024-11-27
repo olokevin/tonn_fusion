@@ -16,7 +16,7 @@ class SubNet(nn.Module):
     '''
 
 
-    def __init__(self, in_size, hidden_size, out_size, dropout, TT_SUBNET, shape, max_rank=20, tensor_type = 'TTM', device=None, dtype=None):
+    def __init__(self, in_size, hidden_size, out_size, dropout, TT_SUBNET=False, shape=None, max_rank=20, tensor_type = 'TTM', device=None, dtype=None):
         '''
         Args:
             in_size: input dimension
@@ -36,7 +36,7 @@ class SubNet(nn.Module):
         self.shape_3 = shape[2]
 
         self.TT_SUBNET = TT_SUBNET
-        if self.TT_SUBNET == 1:
+        if self.TT_SUBNET is True:
           # self.linear_1 = AdaptiveRankLinear(in_size, hidden_size, max_rank = max_rank,  min_dim = 2, 
           #                                       bias=True, tensor_type=tensor_type, prior_type='log_uniform',
           #                                       eta=None, device=device, dtype=dtype)
@@ -181,7 +181,7 @@ class TextSubNet_attention(nn.Module):
 
 class FusionLayer(nn.Module):
     # def __init__(self, input_dims, hidden_dims, audio_out, video_out, text_out, dropouts, output_dim, rank):
-    def __init__(self, input_dims, hidden_dims, sub_out_dims, dropouts, shapes, output_dim, rank, max_rank=2, TT_FUSION = 1, tensor_type = 'TTM', device=None, dtype=None):
+    def __init__(self, input_dims, hidden_dims, sub_out_dims, dropouts, shapes, output_dim, rank, max_rank=2, TT_FUSION = False, tensor_type = 'TTM', device=None, dtype=None):
         
         super(FusionLayer,self).__init__()
 
@@ -223,28 +223,28 @@ class FusionLayer(nn.Module):
           xavier_normal_(self.video_factor)
           xavier_normal_(self.text_factor)
           
-          self.fusion_weights = Parameter(torch.Tensor(1, self.rank))
-          self.fusion_bias = Parameter(torch.Tensor(1, self.output_dim))
-          xavier_normal_(self.fusion_weights)
-          self.fusion_bias.data.fill_(0)
-          
         else:
-          self.audio_fusion = AdaptiveRankLinear(in_features = self.audio_out, out_features = rank*output_dim, max_rank = max_rank, 
-                                                  min_dim=2, bias=False, tensor_type=tensor_type, prior_type='log_uniform',
-                                                  eta=None, device=device, dtype=dtype)
-          self.video_fusion = AdaptiveRankLinear(in_features = self.video_out, out_features = rank*output_dim, max_rank = max_rank, 
-                                                  min_dim=2, bias=False, tensor_type=tensor_type, prior_type='log_uniform',
-                                                  eta=None, device=device, dtype=dtype)
-          self.text_fusion  = AdaptiveRankLinear(in_features = self.text_out, out_features = rank*output_dim, max_rank = max_rank, 
-                                                  min_dim=2, bias=False, tensor_type=tensor_type, prior_type='log_uniform',
-                                                  eta=None, device=device, dtype=dtype)
+          # self.audio_fusion = AdaptiveRankLinear(in_features = self.audio_out, out_features = rank*output_dim, max_rank = max_rank, 
+          #                                         min_dim=2, bias=False, tensor_type=tensor_type, prior_type='log_uniform',
+          #                                         eta=None, device=device, dtype=dtype)
+          # self.video_fusion = AdaptiveRankLinear(in_features = self.video_out, out_features = rank*output_dim, max_rank = max_rank, 
+          #                                         min_dim=2, bias=False, tensor_type=tensor_type, prior_type='log_uniform',
+          #                                         eta=None, device=device, dtype=dtype)
+          # self.text_fusion  = AdaptiveRankLinear(in_features = self.text_out, out_features = rank*output_dim, max_rank = max_rank, 
+          #                                         min_dim=2, bias=False, tensor_type=tensor_type, prior_type='log_uniform',
+          #                                         eta=None, device=device, dtype=dtype)
           
-          # self.audio_fusion = TensorizedLinear_module(self.audio_out, rank*output_dim, bias=None, shape=self.audio_shape, 
-          #                     tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
-          # self.video_fusion = TensorizedLinear_module(self.video_out, rank*output_dim, bias=None, shape=self.video_shape, 
-          #                     tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
-          # self.text_fusion  = TensorizedLinear_module(self.text_out,  rank*output_dim, bias=None, shape=self.text_shape, 
-          #                     tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
+          self.audio_factor = TensorizedLinear_module(self.audio_out+1, rank*output_dim, bias=None, shape=self.audio_shape, 
+                              tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
+          self.video_factor = TensorizedLinear_module(self.video_out+1, rank*output_dim, bias=None, shape=self.video_shape, 
+                              tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
+          self.text_factor  = TensorizedLinear_module(self.text_out+1,  rank*output_dim, bias=None, shape=self.text_shape, 
+                              tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
+        
+        self.fusion_weights = Parameter(torch.Tensor(1, self.rank))
+        self.fusion_bias = Parameter(torch.Tensor(1, self.output_dim))
+        xavier_normal_(self.fusion_weights)
+        self.fusion_bias.data.fill_(0)
 
         
     
@@ -274,10 +274,10 @@ class FusionLayer(nn.Module):
         # non tensorized
         # (batch, audio_out) * (rank, audio_out, output_dim) = (rank, batch, output_dim)    
 
-        if self.TT_FUSION == 1: 
-            fusion_audio = torch.reshape(self.audio_fusion(_audio_h), (batch_size, self.rank, self.output_dim))
-            fusion_video = torch.reshape(self.video_fusion(_video_h), (batch_size, self.rank, self.output_dim))
-            fusion_text  = torch.reshape(self.text_fusion(_text_h),   (batch_size, self.rank, self.output_dim))
+        if self.TT_FUSION is True: 
+            fusion_audio = torch.reshape(self.audio_factor(_audio_h), (batch_size, self.rank, self.output_dim))
+            fusion_video = torch.reshape(self.video_factor(_video_h), (batch_size, self.rank, self.output_dim))
+            fusion_text  = torch.reshape(self.text_factor(_text_h),   (batch_size, self.rank, self.output_dim))
 
             # element-wise product over all output_dim
             fusion_zy = fusion_audio * fusion_video * fusion_text
@@ -285,7 +285,7 @@ class FusionLayer(nn.Module):
             # print("fusion_zy size",fusion_zy.size())
 
             # summation over each rank output (rank in dim 1, now we eliminate rank, thus sum over dim 1)
-            output = torch.sum(fusion_zy, dim=1).squeeze()
+            # output = torch.sum(fusion_zy, dim=1).squeeze()
 
             # print("output size",output.size())
         
@@ -295,12 +295,14 @@ class FusionLayer(nn.Module):
             fusion_text = torch.matmul(_text_h, self.text_factor)
             fusion_zy = fusion_audio * fusion_video * fusion_text
             
-            # summation over each rank output (rank in dim 0, now we eliminate rank, thus sum over dim 0)
-            # output = torch.sum(fusion_zy, dim=0).squeeze()
+            fusion_zy = fusion_zy.permute(1, 0, 2).squeeze()
+            
+        # summation over each rank output (rank in dim 0, now we eliminate rank, thus sum over dim 0)
+        # output = torch.sum(fusion_zy, dim=0).squeeze()
 
-            # use linear transformation instead of simple summation, more flexibility
-            output = torch.matmul(self.fusion_weights, fusion_zy.permute(1, 0, 2)).squeeze() + self.fusion_bias
-            output = output.view(-1, self.output_dim)
+        # use linear transformation instead of simple summation, more flexibility
+        output = torch.matmul(self.fusion_weights, fusion_zy) + self.fusion_bias
+        output = output.view(-1, self.output_dim)
 
         return output
 
@@ -411,6 +413,8 @@ class LMF(nn.Module):
               attention_shape = [[[5,4,3,5],[5,4,3,5]],[[5,4,3,5],[5,4,3,5]]], attention_rank = [ATTN_rank,ATTN_rank],attention_tensor_type = 'TensorTrainMatrix',
               ffn_shape = [[[5,4,3,5],[5,4,3,5]],[[5,4,3,5],[5,4,3,5]]], ffn_rank = [ATTN_rank,ATTN_rank],ffn_tensor_type = 'TensorTrainMatrix',
               d_classifier=self.d_inner, num_class = self.text_out, dropout_classifier = 0.2,
+              # ffn_shape = [[[5,4,3,5],[5,8,6,5]],[[5,8,6,5],[5,4,3,5]]], ffn_rank = [ATTN_rank,ATTN_rank],ffn_tensor_type = 'TensorTrainMatrix',
+              # d_classifier=self.d_model, num_class = self.text_out, dropout_classifier = 0.2,
               classifier_shape = [[5,4,3,5],[5,4,3,5]],classifier_rank = ATTN_rank,classifier_tensor_type = 'TensorTrainMatrix',
               bit_attn = 8, scale_attn = 2**(-5), 
               bit_ffn = 8, scale_ffn = 2**(-5),
@@ -419,7 +423,7 @@ class LMF(nn.Module):
               tensorized=True)
 
         self.fusion = FusionLayer(input_dims, hidden_dims, sub_out_dims, dropouts,
-                      shapes=[[[4,2,2,2],[rank,1,output_dim,1]],[[4,2,2,2],[rank,1,output_dim,1]],[[4,2,2,2],[rank,1,output_dim,1]]],
+                      shapes=[[[4,2,2,2],[rank,1,output_dim,1]],[[4,2,2,2],[rank,1,output_dim,1]],[[4,2,2,4],[rank,1,output_dim,1]]],
                       output_dim=output_dim, rank=rank, max_rank=TT_FUSION_rank, TT_FUSION=TT_FUSION, tensor_type=tensor_type, device=device, dtype=dtype)
        
     # New

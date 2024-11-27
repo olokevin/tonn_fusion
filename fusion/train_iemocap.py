@@ -10,7 +10,6 @@ LastEditTime: 2023-04-20 17:06:18
 import argparse
 import os
 import sys 
-# sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../..")))
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
 import platform
 from typing import Iterable
@@ -60,6 +59,7 @@ def train(
     output_dim = configs.model.output_dim
 
     for batch_idx, batch in enumerate(train_loader):
+        model.zero_grad()
         x = batch[:-1]
         x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
         x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
@@ -90,7 +90,7 @@ def train(
 
     scheduler.step()
     avg_acc_score = accuracy_score(all_true_label, all_predicted_label)
-    lg.info("Epoch: {}, Training loss: {:.2f}, Accuracy: {:.2f}".format(epoch, avg_loss, avg_acc_score))
+    return avg_loss, avg_acc_score
 
 
 def validate(
@@ -118,13 +118,18 @@ def validate(
             loss = criterion(output, y)
 
             avg_loss += loss.data.item() / len(validation_loader)
-            all_true_label = np.concatenate((all_true_label, np.argmax( y.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0)
-            all_predicted_label = np.concatenate((all_predicted_label,np.argmax(output.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0) 
+            # all_true_label = np.concatenate((all_true_label, np.argmax( y.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0)
+            # all_predicted_label = np.concatenate((all_predicted_label,np.argmax(output.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0) 
+    
+    y = y.cpu().data.numpy().reshape(-1, output_dim)
+    all_true_label = np.argmax(y,axis=1)
+    all_predicted_label = np.argmax(output.detach().cpu(),axis=1)
+
     avg_acc_score = accuracy_score(all_true_label, all_predicted_label)
     f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
 
-    lg.info("Epoch: {}, Validation loss: {:.2f}, F1: {:.2f}".format(epoch, avg_loss, f1))
-    return avg_loss, avg_acc_score
+    # lg.info("Epoch: {}, Validation loss: {:.4f}, F1: {:.4f}".format(epoch, avg_loss, f1))
+    return avg_loss, avg_acc_score, f1
 
 
 def main() -> None:
@@ -145,7 +150,8 @@ def main() -> None:
         device = torch.device("cpu")
         torch.backends.cudnn.benchmark = False
 
-    set_torch_deterministic(configs.dataset.seed) 
+    set_torch_deterministic(0)
+    # set_torch_deterministic(configs.dataset.seed) 
     
     configs.run_dir = os.path.join(
             "./tt_runs",
@@ -158,14 +164,24 @@ def main() -> None:
     shutil.copy(args.config, configs.run_dir)
     
     lg.init(configs)
-    lg.info(str(os.getpid()))
 
     model = build_fusion_model()
     model = model.to(device)
-    print(model)
+    lg.info(model)
+    lg.info(str(os.getpid()))
     train_loader, validation_loader, test_loader = build_fusion_dataloader()
-    factors = list(model.parameters())[:3]
-    other = list(model.parameters())[3:]
+    
+    # for name, param in model.named_parameters():
+    #     print(name)
+    factors = list()
+    other = list()
+    for name, param in model.named_parameters():
+        if "factor" in name:
+            factors.append(param)
+        else:
+            other.append(param)
+    # factors = list(model.parameters())[:3]
+    # other = list(model.parameters())[3:]
     optimizer = torch.optim.Adam([{"params": factors, "lr": configs.optimizer.factor_lr}, {"params": other, "lr": configs.optimizer.lr}], weight_decay=configs.optimizer.weight_decay)
     
     # optimizer = builder.make_optimizer(model)
@@ -173,20 +189,50 @@ def main() -> None:
     criterion = builder.make_criterion().to(device)
     
     ### init accuracy
-    avg_valid_loss, avg_valid_accuracy = validate(model, validation_loader, 0, criterion, device)
+    avg_valid_loss, avg_valid_accuracy, f1 = validate(model, validation_loader, 0, criterion, device)
+    lg.info("Epoch: 0, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(avg_valid_loss, avg_valid_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
 
     lossv, accv = [], []
     epoch = 0
     best_valid_accuracy = 0
 
+    ##### training #####
     for epoch in range(int(configs.run.n_epochs)):
-        train(model, train_loader, optimizer, scheduler, epoch, criterion, device)
-        avg_valid_loss, avg_valid_accuracy = validate(model, validation_loader, epoch, criterion, device)
+        avg_train_loss, avg_train_accuracy = train(model, train_loader, optimizer, scheduler, epoch, criterion, device)
+        avg_valid_loss, avg_valid_accuracy, f1 = validate(model, validation_loader, epoch, criterion, device)
+        
+        lg.info("Epoch: {}, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(epoch+1, avg_train_loss, avg_train_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
 
         if (avg_valid_accuracy > best_valid_accuracy):
             best_valid_accuracy = avg_valid_accuracy
             # torch.save(model, os.path.join(configs.run_dir, "best_model.pt"))
             torch.save(model.state_dict(), os.path.join(configs.run_dir, "best_model.pt"))
+    
+    ##### test #####
+    best_model = torch.load(os.path.join(configs.run_dir, "best_model.pt"))
+    best_model.eval()
+    output_dim = configs.model.output_dim
+    for batch in test_loader:
+        x = batch[:-1]
+        x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
+        x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
+        x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
+        y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+        output_test = model(x_a, x_v, x_t)
+        loss_test = criterion(output_test, torch.max(y, 1)[1])
+        test_loss = loss_test.item()
+    output_test = output_test.cpu().data.numpy().reshape(-1, output_dim)
+    y = y.cpu().data.numpy().reshape(-1, output_dim)
+    test_loss = test_loss / len(test_loader)
+
+    # these are the needed metrics
+    all_true_label = np.argmax(y,axis=1)
+    all_predicted_label = np.argmax(output_test,axis=1)
+
+    f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
+    acc_score = accuracy_score(all_true_label, all_predicted_label)
+    
+    lg.info("Test acc: {:.4f}, Val F1: {:.4f}".format(acc_score, f1))
 
 if __name__ == "__main__":
     main()
