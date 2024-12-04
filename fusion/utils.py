@@ -42,7 +42,8 @@ def build_fusion_model():
             TT_SUBNET = configs.model.TT_SUBNET,
             TT_SUBNET_rank = configs.model.TT_SUBNET_rank,
 
-            device = torch.device("cuda:" + str(configs.run.gpu_id)), 
+            # device = torch.device("cuda:" + str(configs.run.gpu_id)), 
+            device = torch.device("cpu"), 
             dtype = torch.float32, 
             use_softmax=False
         )
@@ -70,7 +71,8 @@ def build_fusion_model():
             TT_SUBNET = configs.model.TT_SUBNET,
             TT_SUBNET_rank = configs.model.TT_SUBNET_rank,
 
-            device = torch.device("cuda:" + str(configs.run.gpu_id)), 
+            # device = torch.device("cuda:" + str(configs.run.gpu_id)), 
+            device = torch.device("cpu"), 
             dtype = torch.float32, 
             use_softmax=False
         )
@@ -103,7 +105,7 @@ def build_fusion_dataloader():
 
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
-        batch_size=configs.run.batch_size,
+        batch_size=configs.dataset.batch_size,
         shuffle=int(configs.dataset.shuffle),
         pin_memory=True,
         num_workers=configs.dataset.num_workers,

@@ -10,6 +10,18 @@ from tensor_layers.layers import TensorizedLinear,TensorizedLinear_module
 from tensor_layers.Transformer_tensor import Encoder
 # from tensor_layers.Transformer_tensor import Encoder, TextSubNet_attention
 
+def drop_random_column(matrix):
+    # Get the number of columns in the matrix
+    num_columns = matrix.size(1)
+    
+    # Generate a random index for the column to be dropped
+    drop_idx = torch.randint(0, num_columns, (1,)).item()
+    
+    # Use slicing to exclude the column at the generated index
+    matrix_dropped = torch.cat((matrix[:, :drop_idx], matrix[:, drop_idx+1:]), dim=1)
+    
+    return matrix_dropped
+
 class SubNet(nn.Module):
     '''
     The subnetwork that is used in LMF for video and audio in the pre-fusion stage
@@ -153,12 +165,15 @@ class TextSubNet_attention(nn.Module):
         
         # self.preclassifier = nn.Linear(d_model,d_classifier)
 
-        self.classifier = nn.Linear(d_classifier,num_class)
-
         if tensorized==True:
-            self.preclassifier = TensorizedLinear_module(d_model, d_classifier, shape=classifier_shape, tensor_type=classifier_tensor_type,max_rank=classifier_rank)
+            self.classifier = TensorizedLinear_module(d_classifier, num_class, shape=classifier_shape, tensor_type=classifier_tensor_type,max_rank=classifier_rank)
         else:
-            self.preclassifier = nn.Linear(d_model,d_classifier)
+            self.classifier = nn.Linear(d_classifier,num_class)
+
+        # if tensorized==True:
+        #     self.preclassifier = TensorizedLinear_module(d_model, d_classifier, shape=classifier_shape, tensor_type=classifier_tensor_type,max_rank=classifier_rank)
+        # else:
+        #     self.preclassifier = nn.Linear(d_model,d_classifier)
 
         self.dropout = nn.Dropout(p=dropout_classifier)
         self.relu = nn.ReLU()
@@ -181,7 +196,7 @@ class TextSubNet_attention(nn.Module):
 
 class FusionLayer(nn.Module):
     # def __init__(self, input_dims, hidden_dims, audio_out, video_out, text_out, dropouts, output_dim, rank):
-    def __init__(self, input_dims, hidden_dims, sub_out_dims, dropouts, shapes, output_dim, rank, max_rank=2, TT_FUSION = False, tensor_type = 'TTM', device=None, dtype=None):
+    def __init__(self, input_dims, hidden_dims, sub_out_dims, dropouts, shapes, output_dim, rank, max_rank=2, TT_FUSION = False, FUSION_TYPE='add', tensor_type = 'TTM', device=None, dtype=None):
         
         super(FusionLayer,self).__init__()
 
@@ -210,14 +225,20 @@ class FusionLayer(nn.Module):
         self.eta=1.0
 
         self.TT_FUSION = TT_FUSION
+        self.FUSION_TYPE = FUSION_TYPE
         
         # define the post_fusion layers
         self.post_fusion_dropout = nn.Dropout(p=self.post_fusion_prob)
 
         if(self.TT_FUSION is False):
-          self.audio_factor = Parameter(torch.Tensor(self.rank, self.audio_out + 1, self.output_dim))
-          self.video_factor = Parameter(torch.Tensor(self.rank, self.video_out + 1, self.output_dim))
-          self.text_factor  = Parameter(torch.Tensor(self.rank, self.text_out + 1, self.output_dim))
+          if self.FUSION_TYPE == 'add':
+              self.audio_factor = Parameter(torch.Tensor(self.rank, self.audio_out+1, self.output_dim))
+              self.video_factor = Parameter(torch.Tensor(self.rank, self.video_out+1, self.output_dim))
+              self.text_factor  = Parameter(torch.Tensor(self.rank, self.text_out+1, self.output_dim))
+          elif self.FUSION_TYPE == 'replace':
+              self.audio_factor = Parameter(torch.Tensor(self.rank, self.audio_out, self.output_dim))
+              self.video_factor = Parameter(torch.Tensor(self.rank, self.video_out, self.output_dim))
+              self.text_factor  = Parameter(torch.Tensor(self.rank, self.text_out, self.output_dim))
           # init factors
           xavier_normal_(self.audio_factor)
           xavier_normal_(self.video_factor)
@@ -234,12 +255,15 @@ class FusionLayer(nn.Module):
           #                                         min_dim=2, bias=False, tensor_type=tensor_type, prior_type='log_uniform',
           #                                         eta=None, device=device, dtype=dtype)
           
-          self.audio_factor = TensorizedLinear_module(self.audio_out+1, rank*output_dim, bias=None, shape=self.audio_shape, 
-                              tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
-          self.video_factor = TensorizedLinear_module(self.video_out+1, rank*output_dim, bias=None, shape=self.video_shape, 
-                              tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
-          self.text_factor  = TensorizedLinear_module(self.text_out+1,  rank*output_dim, bias=None, shape=self.text_shape, 
-                              tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
+          self.audio_factor = TensorizedLinear_module(self.audio_out+1 if self.FUSION_TYPE == 'add' else self.audio_out,
+                                                      rank*output_dim, bias=None, shape=self.audio_shape, 
+                                                      tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
+          self.video_factor = TensorizedLinear_module(self.video_out+1 if self.FUSION_TYPE == 'add' else self.video_out,
+                                                      rank*output_dim, bias=None, shape=self.video_shape, 
+                                                      tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
+          self.text_factor  = TensorizedLinear_module(self.text_out+1 if self.FUSION_TYPE == 'add' else self.text_out,
+                                                      rank*output_dim, bias=None, shape=self.text_shape, 
+                                                      tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
         
         self.fusion_weights = Parameter(torch.Tensor(1, self.rank))
         self.fusion_bias = Parameter(torch.Tensor(1, self.output_dim))
@@ -259,15 +283,16 @@ class FusionLayer(nn.Module):
         else:
             DTYPE = torch.FloatTensor
 
-        #concat 1 to unimodal representations 
-        # dim 0: batch dim 1: vector, add 1s in vector (dim 1)
-        # _audio_h = torch.cat((audio_h[:,:-1],Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False)), dim=1)
-        # _video_h = torch.cat((video_h[:,:-1],Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False)), dim=1)
-        # _text_h  = torch.cat((text_h[:,:-1], Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False)), dim=1)
-
-        _audio_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), audio_h), dim=1)
-        _video_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), video_h), dim=1)
-        _text_h  = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), text_h) , dim=1)
+        if self.FUSION_TYPE == 'add':
+            _audio_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), audio_h), dim=1)
+            _video_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), video_h), dim=1)
+            _text_h  = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), text_h) , dim=1)
+        elif self.FUSION_TYPE == 'replace':
+            # concat 1 to unimodal representations 
+            # # dim 0: batch dim 1: vector, add 1s in vector (dim 1)
+            _audio_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), drop_random_column(audio_h)), dim=1)
+            _video_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), drop_random_column(video_h)), dim=1)
+            _text_h  = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE), requires_grad=False), drop_random_column(text_h)), dim=1)
 
         # forward
 
@@ -424,7 +449,7 @@ class LMF(nn.Module):
 
         self.fusion = FusionLayer(input_dims, hidden_dims, sub_out_dims, dropouts,
                       shapes=[[[4,2,2,2],[rank,1,output_dim,1]],[[4,2,2,2],[rank,1,output_dim,1]],[[4,2,2,4],[rank,1,output_dim,1]]],
-                      output_dim=output_dim, rank=rank, max_rank=TT_FUSION_rank, TT_FUSION=TT_FUSION, tensor_type=tensor_type, device=device, dtype=dtype)
+                      output_dim=output_dim, rank=rank, max_rank=TT_FUSION_rank, TT_FUSION=TT_FUSION, FUSION_TYPE=FUSION_TYPE, tensor_type=tensor_type, device=device, dtype=dtype)
        
     # New
     def forward(self, audio_x, video_x, text_x):

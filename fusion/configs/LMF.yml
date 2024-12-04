@@ -3,10 +3,13 @@ dataset:
   dataset_dir: './data/'
   emotion: angry
   classes: 2
-  batch_size: 32
+  batch_size: 64
   num_workers: 4
   shuffle: True
   seed: 0
+
+criterion:
+  name: ce
 
 optimizer:
   name: adam
@@ -39,10 +42,10 @@ model:
 
   # input_dims: [80,36,300,20]
   input_dims: [74,35,300,20]
-  hidden_dims: [8,4,64]
-  sub_out_dims: [8,4,32]
-  # hidden_dims: [32,32,64]
-  # sub_out_dims: [32,32,64]
+  # hidden_dims: [8,4,64]
+  # sub_out_dims: [8,4,32]
+  hidden_dims: [32,32,64]
+  sub_out_dims: [31,31,63]
   dropouts: [0.3,0.1,0.15,0.5]
   output_dim: 2
   rank: 8

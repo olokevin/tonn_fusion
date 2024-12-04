@@ -1,238 +1,350 @@
-'''
-Description:
-Author: Yequan Zhao (yequan_zhao@ucsb.edu)
-Date: 2023-04-20 16:07:22
-LastEditors: Yequan Zhao (yequan_zhao@ucsb.edu)
-LastEditTime: 2023-04-20 17:06:18
-'''
-#!/usr/bin/env python
-# coding=UTF-8
+from __future__ import print_function
+
 import argparse
 import os
 import sys 
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
-import platform
-from typing import Iterable
 
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from model import LMF
+from utils import total, load_iemocap
+from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from pyutils.config import configs
-
-from core import builder
-# from pyutils.general import logger as lg
-from core.utils.logging import logger as lg
-from pyutils.torch_train import BestKModelSaver, count_parameters, get_learning_rate, set_torch_deterministic
-from pyutils.typing import Criterion, DataLoader, Optimizer, Scheduler
-
-import time
-import shutil
-from utils import build_fusion_model, build_fusion_dataloader
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, f1_score
+import os
+import argparse
+import torch
+import random
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+import csv
 
-DTYPE = torch.FloatTensor
-LONG = torch.LongTensor
+import shutil
+from pyutils.config import configs
+from pyutils.torch_train import set_torch_deterministic
+from core.utils.logging import logger as lg
 
 def display(f1_score, accuracy_score):
     print("F1-score on test set is {}".format(f1_score))
     print("Accuracy score on test set is {}".format(accuracy_score))
 
-def train(
-    model: nn.Module,
-    train_loader: DataLoader,
-    optimizer: Optimizer,
-    scheduler: Scheduler,
-    epoch: int,
-    criterion: Criterion,
-    device
-) -> None:
-    model.train()
-    step = epoch * len(train_loader)
-    correct = 0
+def main(options):
 
-    avg_loss = 0.0
-    all_true_label = np.array([])
-    all_predicted_label = np.array([])
-
-    output_dim = configs.model.output_dim
-
-    for batch_idx, batch in enumerate(train_loader):
-        model.zero_grad()
-        x = batch[:-1]
-        x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
-        x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
-        x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
-        y = Variable(batch[-1].view(-1, output_dim).float().type(DTYPE), requires_grad=False).to(device)
-        try:
-            output = model(x_a, x_v, x_t)
-        except ValueError as e:
-            print(x_a.data.shape)
-            print(x_v.data.shape)
-            print(x_t.data.shape)
-            raise e
-        loss = criterion(output, y)
-        loss.backward()
-        optimizer.step()
-
-        avg_loss += loss.data.item() / len(train_loader)
-        all_true_label = np.concatenate((all_true_label, np.argmax( y.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0)
-        all_predicted_label = np.concatenate((all_predicted_label,np.argmax(output.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0)    
-
-        # Terminate the training process if run into NaN
-        if np.isnan(avg_loss):
-            print("Training got into NaN values...\n\n")
-            complete = False
-            break
-
-        step += 1
-
-    scheduler.step()
-    avg_acc_score = accuracy_score(all_true_label, all_predicted_label)
-    return avg_loss, avg_acc_score
-
-
-def validate(
-    model: nn.Module,
-    validation_loader: DataLoader,
-    epoch: int,
-    criterion: Criterion,
-    device
-) -> None:
-    model.eval()
-    avg_loss = 0.0
-    all_true_label = np.array([])
-    all_predicted_label = np.array([])
-
-    output_dim = configs.model.output_dim
-
-    with torch.no_grad():
-        for batch in validation_loader:
-            x = batch[:-1]
-            x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
-            x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
-            x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
-            y = Variable(batch[-1].view(-1, output_dim).float().type(DTYPE), requires_grad=False).to(device)
-            output = model(x_a, x_v, x_t)
-            loss = criterion(output, y)
-
-            avg_loss += loss.data.item() / len(validation_loader)
-            # all_true_label = np.concatenate((all_true_label, np.argmax( y.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0)
-            # all_predicted_label = np.concatenate((all_predicted_label,np.argmax(output.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0) 
-    
-    y = y.cpu().data.numpy().reshape(-1, output_dim)
-    all_true_label = np.argmax(y,axis=1)
-    all_predicted_label = np.argmax(output.detach().cpu(),axis=1)
-
-    avg_acc_score = accuracy_score(all_true_label, all_predicted_label)
-    f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
-
-    # lg.info("Epoch: {}, Validation loss: {:.4f}, F1: {:.4f}".format(epoch, avg_loss, f1))
-    return avg_loss, avg_acc_score, f1
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config", metavar="FILE", help="config file")
-    # parser.add_argument('--run-dir', metavar='DIR', help='run directory')
-    # parser.add_argument('--pdb', action='store_true', help='pdb')
-    args, opts = parser.parse_known_args()
-
-    configs.load(args.config, recursive=True)
-    configs.update(opts)
-
-    if torch.cuda.is_available() and int(configs.run.use_cuda):
-        torch.cuda.set_device(configs.run.gpu_id)
-        device = torch.device("cuda:" + str(configs.run.gpu_id))
-        torch.backends.cudnn.benchmark = True
-    else:
-        device = torch.device("cpu")
-        torch.backends.cudnn.benchmark = False
-
-    set_torch_deterministic(0)
-    # set_torch_deterministic(configs.dataset.seed) 
-    
+    set_torch_deterministic(0) 
     configs.run_dir = os.path.join(
             "./tt_runs",
             # f'TT_ATTN_{configs.model.TT_ATTN}',
             # f'TT_FUSION_{configs.model.TT_FUSION}',
             # f'TT_SUBNET_{configs.model.TT_SUBNET}',
-            time.strftime("%Y%m%d-%H%M%S")+'-'+str(os.getpid())
+            # time.strftime("%Y%m%d-%H%M%S")+'-'+str(os.getpid())
+            str(os.getpid())
         )
     os.makedirs(configs.run_dir, exist_ok=True)
     shutil.copy(args.config, configs.run_dir)
     
     lg.init(configs)
-
-    model = build_fusion_model()
-    model = model.to(device)
-    lg.info(model)
-    lg.info(str(os.getpid()))
-    train_loader, validation_loader, test_loader = build_fusion_dataloader()
     
-    # for name, param in model.named_parameters():
-    #     print(name)
-    factors = list()
-    other = list()
-    for name, param in model.named_parameters():
-        if "factor" in name:
-            factors.append(param)
-        else:
-            other.append(param)
-    # factors = list(model.parameters())[:3]
-    # other = list(model.parameters())[3:]
-    optimizer = torch.optim.Adam([{"params": factors, "lr": configs.optimizer.factor_lr}, {"params": other, "lr": configs.optimizer.lr}], weight_decay=configs.optimizer.weight_decay)
-    
-    # optimizer = builder.make_optimizer(model)
-    scheduler = builder.make_scheduler(optimizer)
-    criterion = builder.make_criterion().to(device)
-    
-    ### init accuracy
-    avg_valid_loss, avg_valid_accuracy, f1 = validate(model, validation_loader, 0, criterion, device)
-    lg.info("Epoch: 0, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(avg_valid_loss, avg_valid_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
+    DTYPE = torch.FloatTensor
+    LONG = torch.LongTensor
 
-    lossv, accv = [], []
-    epoch = 0
-    best_valid_accuracy = 0
-
-    ##### training #####
-    for epoch in range(int(configs.run.n_epochs)):
-        avg_train_loss, avg_train_accuracy = train(model, train_loader, optimizer, scheduler, epoch, criterion, device)
-        avg_valid_loss, avg_valid_accuracy, f1 = validate(model, validation_loader, epoch, criterion, device)
-        
-        lg.info("Epoch: {}, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(epoch+1, avg_train_loss, avg_train_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
-
-        if (avg_valid_accuracy > best_valid_accuracy):
-            best_valid_accuracy = avg_valid_accuracy
-            # torch.save(model, os.path.join(configs.run_dir, "best_model.pt"))
-            torch.save(model.state_dict(), os.path.join(configs.run_dir, "best_model.pt"))
-    
-    ##### test #####
-    best_model = torch.load(os.path.join(configs.run_dir, "best_model.pt"))
-    best_model.eval()
+    # parse the input args
+    epochs = configs.run.n_epochs
+    data_path = configs.dataset.dataset_dir
+    patience = configs.run.patience
+    emotion = configs.dataset.emotion
     output_dim = configs.model.output_dim
-    for batch in test_loader:
-        x = batch[:-1]
-        x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
-        x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
-        x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
-        y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
-        output_test = model(x_a, x_v, x_t)
-        loss_test = criterion(output_test, torch.max(y, 1)[1])
-        test_loss = loss_test.item()
-    output_test = output_test.cpu().data.numpy().reshape(-1, output_dim)
-    y = y.cpu().data.numpy().reshape(-1, output_dim)
-    test_loss = test_loss / len(test_loader)
-
-    # these are the needed metrics
-    all_true_label = np.argmax(y,axis=1)
-    all_predicted_label = np.argmax(output_test,axis=1)
-
-    f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
-    acc_score = accuracy_score(all_true_label, all_predicted_label)
     
-    lg.info("Test acc: {:.4f}, Val F1: {:.4f}".format(acc_score, f1))
+    # epochs = options['epochs']
+    # data_path = options['data_path']
+    # model_path = options['model_path']
+    # output_path = options['output_path']
+    # signiture = options['signiture']
+    # patience = options['patience']
+    # emotion = options['emotion']
+    # output_dim = options['output_dim']
+
+
+    # prepare the paths for storing models and outputs
+    # model_path = os.path.join(
+    #     model_path, "model_{}_{}.pt".format(signiture, emotion))
+    # output_path = os.path.join(
+    #     output_path, "results_{}_{}.csv".format(signiture, emotion))
+    # print("Temp location for models: {}".format(model_path))
+    # print("Grid search results are in: {}".format(output_path))
+    # os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # os.makedirs(os.path.dirname(model_path), exist_ok=True)
+
+    train_set, valid_set, test_set = load_iemocap(data_path, emotion)
+
+    params = dict()
+    # params['audio_hidden'] = [8, 16, 32]
+    # params['video_hidden'] = [4, 8, 16]
+    # params['text_hidden'] = [64, 128, 256]
+    # params['audio_dropout'] = [0, 0.1, 0.15, 0.2, 0.3, 0.5]
+    # params['video_dropout'] = [0, 0.1, 0.15, 0.2, 0.3, 0.5]
+    # params['text_dropout'] = [0, 0.1, 0.15, 0.2, 0.3, 0.5]
+    # params['factor_learning_rate'] = [0.0003, 0.0005, 0.001, 0.003]
+    # params['learning_rate'] = [0.0003, 0.0005, 0.001, 0.003]
+    # params['rank'] = [1, 4, 8, 16]
+    # params['batch_size'] = [8, 16, 32, 64, 128]
+    # params['weight_decay'] = [0, 0.001, 0.002, 0.01]
+    
+    # params['audio_hidden'] = [8,]
+    # params['video_hidden'] = [4,]
+    # params['text_hidden'] = [64,]
+    # params['audio_dropout'] = [0.3,]
+    # params['video_dropout'] = [0.1,]
+    # params['text_dropout'] = [0.15,]
+    # params['rank'] = [8,]
+    
+    params['factor_learning_rate'] = [configs.optimizer.factor_lr, ]
+    params['learning_rate'] = [configs.optimizer.lr, ]
+    params['batch_size'] = [configs.dataset.batch_size, ]
+    params['weight_decay'] = [configs.optimizer.weight_decay, ]
+
+    total_settings = total(params)
+
+    # print("There are {} different hyper-parameter settings in total.".format(total_settings))
+
+    # seen_settings = set()
+
+    # if not os.path.isfile(output_path):
+    #     with open(output_path, 'w+') as out:
+    #         writer = csv.writer(out)
+    #         writer.writerow(["audio_hidden", "video_hidden", 'text_hidden', 'audio_dropout', 'video_dropout', 'text_dropout',
+    #                         'factor_learning_rate', 'learning_rate', 'rank', 'batch_size', 'weight_decay', 
+    #                         'Best Validation CrossEntropyLoss', 'Test CrossEntropyLoss', 'Test F1-score', 'Test Accuracy Score'])
+
+    for i in range(total_settings):
+
+        # ahid = random.choice(params['audio_hidden'])
+        # vhid = random.choice(params['video_hidden'])
+        # thid = random.choice(params['text_hidden'])
+        # thid_2 = thid // 2
+        # adr = random.choice(params['audio_dropout'])
+        # vdr = random.choice(params['video_dropout'])
+        # tdr = random.choice(params['text_dropout'])
+        # factor_lr = random.choice(params['factor_learning_rate'])
+        # lr = random.choice(params['learning_rate'])
+        # r = random.choice(params['rank'])
+        # batch_sz = random.choice(params['batch_size'])
+        # decay = random.choice(params['weight_decay'])
+
+        # # reject the setting if it has been tried
+        # current_setting = (ahid, vhid, thid, adr, vdr, tdr, factor_lr, lr, r, batch_sz, decay)
+        # if current_setting in seen_settings:
+        #     continue
+        # else:
+        #     seen_settings.add(current_setting)
+
+        # model = LMF(input_dims, (ahid, vhid, thid), thid_2, (adr, vdr, tdr, 0.5), output_dim, r)
+        # if options['cuda']:
+        #     model = model.cuda()
+        #     DTYPE = torch.cuda.FloatTensor
+        #     LONG = torch.cuda.LongTensor
+        
+        factor_lr = random.choice(params['factor_learning_rate'])
+        lr = random.choice(params['learning_rate'])
+        batch_sz = random.choice(params['batch_size'])
+        decay = random.choice(params['weight_decay'])
+        
+        from utils import build_fusion_model
+        model = build_fusion_model()
+        # model = model.to(device)
+        lg.info(model)
+        lg.info(str(os.getpid()))
+        
+        print("Model initialized")
+        criterion = nn.CrossEntropyLoss(size_average=False)
+        factors = list(model.parameters())[:3]
+        other = list(model.parameters())[3:]
+        
+        # for name, param in model.named_parameters():
+        #     print(name, param.shape)
+        
+        # for param in model.parameters():
+        #     print(param.shape)
+        
+        # factors = list()
+        # other = list()
+        # for name, param in model.named_parameters():
+        #     if "factor" in name:
+        #         # print(name)
+        #         factors.append(param)
+        #     else:
+        #         other.append(param)
+        
+        optimizer = optim.Adam([{"params": factors, "lr": factor_lr}, {"params": other, "lr": lr}], weight_decay=decay)
+
+        # setup training
+        complete = True
+        min_valid_loss = float('Inf')
+        train_iterator = DataLoader(train_set, batch_size=batch_sz, num_workers=4, shuffle=True)
+        valid_iterator = DataLoader(valid_set, batch_size=len(valid_set), num_workers=4, shuffle=True)
+        test_iterator = DataLoader(test_set, batch_size=len(test_set), num_workers=4, shuffle=True)
+        curr_patience = patience
+        
+        # test before training
+        model.eval()
+        for batch in valid_iterator:
+            x = batch[:-1]
+            x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
+            x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
+            x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
+            y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+            output = model(x_a, x_v, x_t)
+            valid_loss = criterion(output, torch.max(y, 1)[1])
+            avg_valid_loss = valid_loss.item()
+        y = y.cpu().data.numpy().reshape(-1, output_dim)
+
+        if np.isnan(avg_valid_loss):
+            print("Training got into NaN values...\n\n")
+            complete = False
+            break
+
+        avg_valid_loss = avg_valid_loss / len(valid_set)
+        # print("Validation loss is: {}".format(avg_valid_loss))
+        
+        all_true_label = np.argmax(y,axis=1)
+        all_predicted_label = np.argmax(output.detach().cpu(),axis=1)
+        
+        avg_valid_accuracy = accuracy_score(all_true_label, all_predicted_label)
+        f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
+        # print("Validation F1 is: {}".format(f1))
+        lg.info("Epoch: 0, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(avg_valid_loss, avg_valid_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
+        
+        for e in range(epochs):
+            ##### Training #####
+            model.train()
+            model.zero_grad()
+            avg_train_loss = 0.0
+            for batch in train_iterator:
+                model.zero_grad()
+
+                x = batch[:-1]
+                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
+                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
+                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
+                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+                try:
+                    output = model(x_a, x_v, x_t)
+                except ValueError as e:
+                    print(x_a.data.shape)
+                    print(x_v.data.shape)
+                    print(x_t.data.shape)
+                    raise e
+                loss = criterion(output, torch.max(y, 1)[1])
+                loss.backward()
+                avg_loss = loss.item()
+                avg_train_loss += avg_loss / len(train_set)
+                optimizer.step()
+            
+                all_true_label = np.concatenate((all_true_label, np.argmax( y.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0)
+                all_predicted_label = np.concatenate((all_predicted_label,np.argmax(output.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0) 
+            
+            avg_train_accuracy = accuracy_score(all_true_label, all_predicted_label)
+
+            # print("Epoch {} complete! Average Training loss: {}".format(e, avg_train_loss))
+
+            # Terminate the training process if run into NaN
+            if np.isnan(avg_train_loss):
+                print("Training got into NaN values...\n\n")
+                complete = False
+                break
+
+            ##### Validation #####
+            model.eval()
+            for batch in valid_iterator:
+                x = batch[:-1]
+                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
+                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
+                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
+                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+                output = model(x_a, x_v, x_t)
+                valid_loss = criterion(output, torch.max(y, 1)[1])
+                avg_valid_loss = valid_loss.item()
+            y = y.cpu().data.numpy().reshape(-1, output_dim)
+
+            if np.isnan(avg_valid_loss):
+                print("Training got into NaN values...\n\n")
+                complete = False
+                break
+
+            avg_valid_loss = avg_valid_loss / len(valid_set)
+            # print("Validation loss is: {}".format(avg_valid_loss))
+            
+            all_true_label = np.argmax(y,axis=1)
+            all_predicted_label = np.argmax(output.detach().cpu(),axis=1)
+            avg_valid_accuracy = accuracy_score(all_true_label, all_predicted_label)
+            f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
+            # print("Validation F1 is: {}".format(f1))
+
+            if (avg_valid_loss < min_valid_loss):
+                curr_patience = patience
+                min_valid_loss = avg_valid_loss
+                # torch.save(model, model_path)
+                torch.save(model.state_dict(), os.path.join(configs.run_dir, "best_model.pt"))
+                # print("Found new best model, saving to disk...")
+            else:
+                curr_patience -= 1
+            
+            if curr_patience <= 0:
+                break
+            # print("\n")
+            
+            lg.info("Epoch: {}, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(e+1, avg_train_loss, avg_train_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
+
+        if complete:
+            
+            model.load_state_dict(torch.load(os.path.join(configs.run_dir, "best_model.pt")))
+            model.eval()
+            for batch in test_iterator:
+                x = batch[:-1]
+                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
+                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
+                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
+                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+                output_test = model(x_a, x_v, x_t)
+                loss_test = criterion(output_test, torch.max(y, 1)[1])
+                test_loss = loss_test.item()
+            output_test = output_test.cpu().data.numpy().reshape(-1, output_dim)
+            y = y.cpu().data.numpy().reshape(-1, output_dim)
+            test_loss = test_loss / len(test_set)
+
+            # these are the needed metrics
+            all_true_label = np.argmax(y,axis=1)
+            all_predicted_label = np.argmax(output_test,axis=1)
+
+            f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
+            acc_score = accuracy_score(all_true_label, all_predicted_label)
+
+            display(f1, acc_score)
+
+            # with open(output_path, 'a+') as out:
+            #     writer = csv.writer(out)
+            #     writer.writerow([ahid, vhid, thid, adr, vdr, tdr, factor_lr, lr, r, batch_sz, decay, 
+            #                     min_valid_loss, test_loss, f1, acc_score])
+
 
 if __name__ == "__main__":
-    main()
+    OPTIONS = argparse.ArgumentParser()
+    # OPTIONS.add_argument('--emotion', dest='emotion', type=str, default='angry')
+    # OPTIONS.add_argument('--epochs', dest='epochs', type=int, default=100)
+    # OPTIONS.add_argument('--output_dim', dest='output_dim', type=int, default=2)
+    # OPTIONS.add_argument('--patience', dest='patience', type=int, default=20)
+    # OPTIONS.add_argument('--signiture', dest='signiture', type=str, default='')
+    # OPTIONS.add_argument('--cuda', dest='cuda', type=bool, default=True)
+    # OPTIONS.add_argument('--data_path', dest='data_path',
+    #                      type=str, default='data/')
+    # OPTIONS.add_argument('--model_path', dest='model_path',
+    #                      type=str, default='models')
+    # OPTIONS.add_argument('--output_path', dest='output_path',
+    #                      type=str, default='results')
+    
+    OPTIONS.add_argument("config", metavar="FILE", help="config file")
+    args, opts = OPTIONS.parse_known_args()
+    configs.load(args.config, recursive=True)
+    # configs.update(opts)
+    
+    PARAMS = vars(OPTIONS.parse_args())
+    main(PARAMS)
