@@ -156,23 +156,17 @@ def main(options):
         
         print("Model initialized")
         criterion = nn.CrossEntropyLoss(size_average=False)
-        factors = list(model.parameters())[:3]
-        other = list(model.parameters())[3:]
+        # factors = list(model.parameters())[:3]
+        # other = list(model.parameters())[3:]
         
-        # for name, param in model.named_parameters():
-        #     print(name, param.shape)
-        
-        # for param in model.parameters():
-        #     print(param.shape)
-        
-        # factors = list()
-        # other = list()
-        # for name, param in model.named_parameters():
-        #     if "factor" in name:
-        #         # print(name)
-        #         factors.append(param)
-        #     else:
-        #         other.append(param)
+        factors = list()
+        other = list()
+        for name, param in model.named_parameters():
+            if "factor" in name:
+                # print(name)
+                factors.append(param)
+            else:
+                other.append(param)
         
         optimizer = optim.Adam([{"params": factors, "lr": factor_lr}, {"params": other, "lr": lr}], weight_decay=decay)
 
