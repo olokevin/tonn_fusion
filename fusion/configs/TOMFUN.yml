@@ -14,8 +14,11 @@ criterion:
 optimizer:
   name: adam
   factor_lr: 0.003
+  # factor_lr: [0.0003, 0.0005, 0.001, 0.003]
   lr: 0.0005
+  # lr: [0.0003, 0.0005, 0.001, 0.003]
   weight_decay: 0.001
+  # weight_decay: [0, 0.001, 0.002, 0.01]
 
 scheduler:
   name: cosine
@@ -23,24 +26,15 @@ scheduler:
   lr_min: 0  
 
 run:
-  n_epochs: 100
+  n_epochs: 50
   model_path_dir: './tt_models/'
   signiture: 'lmf'
-  patience: 50
-
-  patience: 10
-  factor: 0.1
-  log_interval: 10
-  save_model: True
-  save_interval: 10
-  save_best: True
-  save_path: 'models/TT'
-  resume: False
+  patience: 20
 
 model:
   name: TOMFUN
-  # mzi_noise: True
-  mzi_noise: False
+  mzi_noise: True
+  # mzi_noise: False
 
   miniblock: 8
   mode: "weight"
@@ -48,15 +42,26 @@ model:
   # mode: "phase"
   act_thres: 2.0
 
-  # input_dims: [80,36,300,20]
-  input_dims: [74,35,300,20]
+  input_dims: [80,36,300,20]
+  # input_dims: [74,35,300,20]
 
-  hidden_dims: [16,16,64]
-  FUSION_TYPE: 'add'
-  sub_out_dims: [16,16,32]
-  # sub_out_dims: [7,3,63]
+  # hidden_dims: [8,4,64]
+  # FUSION_TYPE: 'add'
+  # sub_out_dims: [8,4,32]
+  # # sub_out_dims: [7,3,63]
+  # # FUSION_TYPE: 'replace'
+  # # sub_out_dims: [8,4,64]
+
+  hidden_dims: [32,32,64]
+  # FUSION_TYPE: 'add'
+  # sub_out_dims: [32,32,32]
+  # FUSION_TYPE: 'add'
+  # sub_out_dims: [31,31,31]
   FUSION_TYPE: 'replace'
-  sub_out_dims: [16,16,32]
+  sub_out_dims: [32,32,64]
+  dropouts: [0.3,0.1,0.15,0.5]
+  output_dim: 2
+  rank: 8
 
   # TT_ATTN: False
   TT_ATTN: True
@@ -68,8 +73,8 @@ model:
   TT_FUSION: True
   TT_FUSION_rank: 4
 
-  TT_SUBNET: False
-  # TT_SUBNET: True
+  # TT_SUBNET: False
+  TT_SUBNET: True
   TT_SUBNET_rank: 4
   tensor_type: 'TTM'
 

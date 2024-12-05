@@ -254,135 +254,8 @@ class TTM_LinearBlock(nn.Module):
     (TODO) orthogonal tensor train layer
 """
 
-"""
-    (deprecated) TTM MLP
-"""
-
-class SparseBP_MZI_TTM_MLP(SparseBP_Base):
-    """MZI TTM MLP (Xian+, APL Photonics 2021). Support sparse backpropagation. Blocking matrix multiplication."""
-    
-    def __init__(
-        self,
-        n_feat: int,
-        n_class: int,
-        hidden_list: List[int] = [32],
-        block_list: List[int] = [8],
-        in_shape: List[int] = [4,7,7,4],
-        hidden_shape_list: List[List[int]] = [[4,4,4,4],[4,4,4,4]],
-        out_shape: List[int] = [1,5,2,1],
-        max_rank_list: List[int] = [4],
-        in_bit: int = 32,
-        w_bit: int = 32,
-        mode: str = "usv",
-        v_max: float = 10.8,
-        v_pi: float = 4.36,
-        act_thres: float = 6.0,
-        photodetect: bool = True,
-        bias: bool = False,
-        device: Device = torch.device("cuda"),
-    ) -> None:
-        super().__init__()
-        self.n_feat = n_feat
-        self.n_class = n_class
-        self.hidden_list = hidden_list
-        self.block_list = block_list
-
-        self.in_shape = in_shape
-        self.hidden_shape_list = hidden_shape_list
-        self.out_shape = out_shape
-        self.max_rank_list = max_rank_list
-
-        self.in_bit = in_bit
-        self.w_bit = w_bit
-        self.mode = mode
-        self.v_max = v_max
-        self.v_pi = v_pi
-        self.act_thres = act_thres
-
-        self.photodetect = photodetect
-        self.bias = bias
-
-        self.device = device
-
-        self.build_layers()
-        self.drop_masks = None
-
-        # self.reset_parameters()
-        self.gamma_noise_std = 0
-        self.crosstalk_factor = 0
-
-    def build_layers(self) -> None:
-        self.classifier = OrderedDict()
-
-        '''input & hidden layers'''
-        for idx, hidden_dim in enumerate(self.hidden_list, 0):
-            layer_name = "fc" + str(idx + 1)
-            in_channel = self.n_feat if idx == 0 else self.hidden_list[idx - 1]
-            out_channel = hidden_dim
-            in_shape = self.in_shape if idx == 0 else self.hidden_shape_list[idx-1]
-            out_shape = self.hidden_shape_list[idx]
-
-            # self.max_rank_list: store as a tuple, 1st element is the original list
-            max_rank = self.max_rank_list[idx]
-            if type(max_rank)==int:
-                tt_rank = [1]+(len(in_shape)-1)*[max_rank]+[1]
-            else:
-                assert(type(max_rank)==list)
-                tt_rank = max_rank
-
-            self.classifier[layer_name] = TTM_LinearBlock(
-                in_channel,
-                out_channel,
-                miniblock=self.block_list[idx],
-                in_shape=in_shape,
-                out_shape=out_shape,
-                tt_rank=tt_rank,
-                bias=self.bias,
-                mode=self.mode,
-                v_max=self.v_max,
-                v_pi=self.v_pi,
-                in_bit=self.in_bit,
-                w_bit=self.w_bit,
-                photodetect=self.photodetect,
-                device=self.device,
-                activation=True,
-                act_thres=self.act_thres,
-            )
-
-        '''output classifier'''
-        layer_name = "fc" + str(len(self.hidden_list) + 1)
-        max_rank = self.max_rank_list[-1]
-        if type(max_rank)==int:
-            tt_rank = [1]+(len(in_shape)-1)*[max_rank]+[1]
-        else:
-            assert(type(max_rank)==list)
-            tt_rank = max_rank
-        self.classifier[layer_name] = TTM_LinearBlock(
-                self.hidden_list[-1] if len(self.hidden_list) > 0 else self.n_feat,
-                self.n_class,
-                miniblock=self.block_list[idx],
-                in_shape=self.hidden_shape_list[-1],
-                out_shape=self.out_shape,
-                tt_rank=tt_rank,
-                bias=self.bias,
-                mode=self.mode,
-                v_max=self.v_max,
-                v_pi=self.v_pi,
-                in_bit=self.in_bit,
-                w_bit=self.w_bit,
-                photodetect=self.photodetect,
-                device=self.device,
-                activation=False,
-                act_thres=self.act_thres,
-            )
-        self.classifier = nn.Sequential(self.classifier)
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
-        return x
-
 ########## For PINN training (deprecated)
+########## For TOMFUN training (24-Dec)
 class TTM_Linear_module(nn.Module):
     def __init__(
         self,
@@ -419,6 +292,7 @@ class TTM_Linear_module(nn.Module):
         self.out_shape = shape[1]
         self.max_rank = max_rank
         self.order = len(self.in_shape)
+        self.mode = mode
 
         if len(self.in_shape) != len(self.out_shape):
             raise (ValueError("the input dim and output dim should be the same"))
@@ -477,6 +351,7 @@ class TTM_Linear_module(nn.Module):
         std_factors = (std / r) ** (1 / d)
         for tt_core in self.tt_cores:
             tt_core.reset_parameters_ttm(std_factors)
+            # tt_core.sync_parameters(src=self.mode)
         
     def extra_repr(self):
         model_str = f"MyModel(\n"
@@ -644,3 +519,131 @@ class TTM_Linear_module(nn.Module):
         if self.activation is not None:
             output = self.activation(output)
         return output
+      
+"""
+    (deprecated) TTM MLP
+"""
+
+class SparseBP_MZI_TTM_MLP(SparseBP_Base):
+    """MZI TTM MLP (Xian+, APL Photonics 2021). Support sparse backpropagation. Blocking matrix multiplication."""
+    
+    def __init__(
+        self,
+        n_feat: int,
+        n_class: int,
+        hidden_list: List[int] = [32],
+        block_list: List[int] = [8],
+        in_shape: List[int] = [4,7,7,4],
+        hidden_shape_list: List[List[int]] = [[4,4,4,4],[4,4,4,4]],
+        out_shape: List[int] = [1,5,2,1],
+        max_rank_list: List[int] = [4],
+        in_bit: int = 32,
+        w_bit: int = 32,
+        mode: str = "usv",
+        v_max: float = 10.8,
+        v_pi: float = 4.36,
+        act_thres: float = 6.0,
+        photodetect: bool = True,
+        bias: bool = False,
+        device: Device = torch.device("cuda"),
+    ) -> None:
+        super().__init__()
+        self.n_feat = n_feat
+        self.n_class = n_class
+        self.hidden_list = hidden_list
+        self.block_list = block_list
+
+        self.in_shape = in_shape
+        self.hidden_shape_list = hidden_shape_list
+        self.out_shape = out_shape
+        self.max_rank_list = max_rank_list
+
+        self.in_bit = in_bit
+        self.w_bit = w_bit
+        self.mode = mode
+        self.v_max = v_max
+        self.v_pi = v_pi
+        self.act_thres = act_thres
+
+        self.photodetect = photodetect
+        self.bias = bias
+
+        self.device = device
+
+        self.build_layers()
+        self.drop_masks = None
+
+        # self.reset_parameters()
+        self.gamma_noise_std = 0
+        self.crosstalk_factor = 0
+
+    def build_layers(self) -> None:
+        self.classifier = OrderedDict()
+
+        '''input & hidden layers'''
+        for idx, hidden_dim in enumerate(self.hidden_list, 0):
+            layer_name = "fc" + str(idx + 1)
+            in_channel = self.n_feat if idx == 0 else self.hidden_list[idx - 1]
+            out_channel = hidden_dim
+            in_shape = self.in_shape if idx == 0 else self.hidden_shape_list[idx-1]
+            out_shape = self.hidden_shape_list[idx]
+
+            # self.max_rank_list: store as a tuple, 1st element is the original list
+            max_rank = self.max_rank_list[idx]
+            if type(max_rank)==int:
+                tt_rank = [1]+(len(in_shape)-1)*[max_rank]+[1]
+            else:
+                assert(type(max_rank)==list)
+                tt_rank = max_rank
+
+            self.classifier[layer_name] = TTM_LinearBlock(
+                in_channel,
+                out_channel,
+                miniblock=self.block_list[idx],
+                in_shape=in_shape,
+                out_shape=out_shape,
+                tt_rank=tt_rank,
+                bias=self.bias,
+                mode=self.mode,
+                v_max=self.v_max,
+                v_pi=self.v_pi,
+                in_bit=self.in_bit,
+                w_bit=self.w_bit,
+                photodetect=self.photodetect,
+                device=self.device,
+                activation=True,
+                act_thres=self.act_thres,
+            )
+
+        '''output classifier'''
+        layer_name = "fc" + str(len(self.hidden_list) + 1)
+        max_rank = self.max_rank_list[-1]
+        if type(max_rank)==int:
+            tt_rank = [1]+(len(in_shape)-1)*[max_rank]+[1]
+        else:
+            assert(type(max_rank)==list)
+            tt_rank = max_rank
+        self.classifier[layer_name] = TTM_LinearBlock(
+                self.hidden_list[-1] if len(self.hidden_list) > 0 else self.n_feat,
+                self.n_class,
+                miniblock=self.block_list[idx],
+                in_shape=self.hidden_shape_list[-1],
+                out_shape=self.out_shape,
+                tt_rank=tt_rank,
+                bias=self.bias,
+                mode=self.mode,
+                v_max=self.v_max,
+                v_pi=self.v_pi,
+                in_bit=self.in_bit,
+                w_bit=self.w_bit,
+                photodetect=self.photodetect,
+                device=self.device,
+                activation=False,
+                act_thres=self.act_thres,
+            )
+        self.classifier = nn.Sequential(self.classifier)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x

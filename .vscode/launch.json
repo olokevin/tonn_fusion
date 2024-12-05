@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "LMF",
+      "name": "fusion",
       "type": "debugpy",
       "request": "launch",
       "program": "train_iemocap.py",
@@ -15,20 +15,7 @@
         "CUDA_VISIBLE_DEVICES": "0"
       },
       // "args": ["configs/LMF.yml"],
-      "args": ["configs/TT_LMF.yml"],
-      // "args": ["configs/TOMFUN.yml"],
-      "justMyCode": true
-    },
-    {
-      "name": "TOMFUN",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "train_iemocap.py",
-      "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}/fusion",
-      "env": {
-        "CUDA_VISIBLE_DEVICES": "0"
-      },
+      // "args": ["configs/TT_LMF.yml"],
       "args": ["configs/TOMFUN.yml"],
       "justMyCode": true
     },

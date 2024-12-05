@@ -256,13 +256,13 @@ class FusionLayer(nn.Module):
           #                                         eta=None, device=device, dtype=dtype)
           
           self.audio_factor = TensorizedLinear_module(self.audio_out+1 if self.FUSION_TYPE == 'add' else self.audio_out,
-                                                      rank*output_dim, bias=None, shape=self.audio_shape, 
+                                                      rank*output_dim, bias=False, shape=self.audio_shape, 
                                                       tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
           self.video_factor = TensorizedLinear_module(self.video_out+1 if self.FUSION_TYPE == 'add' else self.video_out,
-                                                      rank*output_dim, bias=None, shape=self.video_shape, 
+                                                      rank*output_dim, bias=False, shape=self.video_shape, 
                                                       tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
           self.text_factor  = TensorizedLinear_module(self.text_out+1 if self.FUSION_TYPE == 'add' else self.text_out,
-                                                      rank*output_dim, bias=None, shape=self.text_shape, 
+                                                      rank*output_dim, bias=False, shape=self.text_shape, 
                                                       tensor_type=tensor_type, max_rank=max_rank, prior_type=self.prior_type, eta=self.eta, device=device, dtype=dtype)
         
         self.fusion_weights = Parameter(torch.Tensor(1, self.rank))
@@ -440,7 +440,7 @@ class LMF(nn.Module):
               d_classifier=self.d_inner, num_class = self.text_out, dropout_classifier = 0.2,
               # ffn_shape = [[[5,4,3,5],[5,8,6,5]],[[5,8,6,5],[5,4,3,5]]], ffn_rank = [ATTN_rank,ATTN_rank],ffn_tensor_type = 'TensorTrainMatrix',
               # d_classifier=self.d_model, num_class = self.text_out, dropout_classifier = 0.2,
-              classifier_shape = [[5,4,3,5],[5,4,3,5]],classifier_rank = ATTN_rank,classifier_tensor_type = 'TensorTrainMatrix',
+              classifier_shape = [[5,4,3,5],[4,2,2,4]],classifier_rank = ATTN_rank,classifier_tensor_type = 'TensorTrainMatrix',
               bit_attn = 8, scale_attn = 2**(-5), 
               bit_ffn = 8, scale_ffn = 2**(-5),
               bit_a = 8, scale_a = 2**(-5),
@@ -449,6 +449,7 @@ class LMF(nn.Module):
 
         self.fusion = FusionLayer(input_dims, hidden_dims, sub_out_dims, dropouts,
                       shapes=[[[4,2,2,2],[rank,1,output_dim,1]],[[4,2,2,2],[rank,1,output_dim,1]],[[4,2,2,4],[rank,1,output_dim,1]]],
+                      # shapes=[[[4,8],[rank,output_dim]],[[4,8],[rank,output_dim]],[[8,8],[rank,output_dim]]],
                       output_dim=output_dim, rank=rank, max_rank=TT_FUSION_rank, TT_FUSION=TT_FUSION, FUSION_TYPE=FUSION_TYPE, tensor_type=tensor_type, device=device, dtype=dtype)
        
     # New

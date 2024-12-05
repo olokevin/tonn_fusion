@@ -9,8 +9,41 @@ import tensorly as tl
 
 
 
+# class EncoderLayer(nn.Module):
+#     ''' Compose with two layers '''
+
+#     def __init__(self, d_model, d_inner, n_head, d_q,d_k, d_v, dropout=0.1,
+#                 attention_shape = [[4,4,8,4,4,4,8,4],[4,4,8,4,4,4,8,4]], attention_rank = [20,20],attention_tensor_type = 'TensorTrain',
+#                 ffn_shape = [[4,4,8,4,4,4,8,4],[4,4,8,4,4,4,8,4]], ffn_rank = [20,20],ffn_tensor_type = 'TensorTrain',
+#                 bit_attn = 8, scale_attn = 2**(-5), 
+#                 bit_ffn = 8, scale_ffn = 2**(-5),
+#                 bit_a = 8, scale_a = 2**(-5),
+#                 quantized = False,
+#                 tensorized=True):
+#         super(EncoderLayer, self).__init__()
+        
+#         if tensorized:
+#             self.slf_attn = Tensor_Attention(d_model,d_q,d_k,d_v,n_head, dropout=dropout,shape=attention_shape,rank=attention_rank,tensor_type=attention_tensor_type,
+#             bit_w=bit_attn,scale_w=scale_attn,
+#             quantized=quantized)
+#             self.pos_ffn = Tensor_PFF(d_model, d_inner, dropout=dropout,shape=ffn_shape,rank=ffn_rank,tensor_type=ffn_tensor_type,
+#             bit_w=bit_ffn,scale_w=scale_ffn,
+#             bit_a=bit_a, scale_a=scale_a,
+#             quantized=quantized)
+#         else:
+#             self.slf_attn = MultiHeadAttention(n_head, d_model, d_k, d_v, dropout=dropout)
+#             self.pos_ffn = PositionwiseFeedForward(d_model, d_inner, dropout=dropout)
+        
+        
+       
+#     def forward(self, enc_input, slf_attn_mask=None, ranks=None,scale=None):
+#         enc_output, enc_slf_attn = self.slf_attn(
+#             enc_input, enc_input, enc_input, mask=slf_attn_mask, ranks=ranks, scale=scale)
+#         enc_output = self.pos_ffn(enc_output,ranks=ranks,scale=scale)
+#         return enc_output, enc_slf_attn
+
 class EncoderLayer(nn.Module):
-    ''' Compose with two layers '''
+    ''' Compose without ffn '''
 
     def __init__(self, d_model, d_inner, n_head, d_q,d_k, d_v, dropout=0.1,
                 attention_shape = [[4,4,8,4,4,4,8,4],[4,4,8,4,4,4,8,4]], attention_rank = [20,20],attention_tensor_type = 'TensorTrain',
@@ -22,24 +55,30 @@ class EncoderLayer(nn.Module):
                 tensorized=True):
         super(EncoderLayer, self).__init__()
         
+        # self.en_ffn = True
+        self.en_ffn = False
+        
         if tensorized:
             self.slf_attn = Tensor_Attention(d_model,d_q,d_k,d_v,n_head, dropout=dropout,shape=attention_shape,rank=attention_rank,tensor_type=attention_tensor_type,
             bit_w=bit_attn,scale_w=scale_attn,
             quantized=quantized)
-            self.pos_ffn = Tensor_PFF(d_model, d_inner, dropout=dropout,shape=ffn_shape,rank=ffn_rank,tensor_type=ffn_tensor_type,
-            bit_w=bit_ffn,scale_w=scale_ffn,
-            bit_a=bit_a, scale_a=scale_a,
-            quantized=quantized)
+            if self.en_ffn:
+                self.pos_ffn = Tensor_PFF(d_model, d_inner, dropout=dropout,shape=ffn_shape,rank=ffn_rank,tensor_type=ffn_tensor_type,
+                bit_w=bit_ffn,scale_w=scale_ffn,
+                bit_a=bit_a, scale_a=scale_a,
+                quantized=quantized)
         else:
             self.slf_attn = MultiHeadAttention(n_head, d_model, d_k, d_v, dropout=dropout)
-            self.pos_ffn = PositionwiseFeedForward(d_model, d_inner, dropout=dropout)
+            if self.en_ffn:
+                self.pos_ffn = PositionwiseFeedForward(d_model, d_inner, dropout=dropout)
         
         
        
     def forward(self, enc_input, slf_attn_mask=None, ranks=None,scale=None):
         enc_output, enc_slf_attn = self.slf_attn(
             enc_input, enc_input, enc_input, mask=slf_attn_mask, ranks=ranks, scale=scale)
-        enc_output = self.pos_ffn(enc_output,ranks=ranks,scale=scale)
+        if self.en_ffn:
+            enc_output = self.pos_ffn(enc_output,ranks=ranks,scale=scale)
         return enc_output, enc_slf_attn
 
 

@@ -40,12 +40,27 @@ def main(options):
             str(os.getpid())
         )
     os.makedirs(configs.run_dir, exist_ok=True)
-    shutil.copy(args.config, configs.run_dir)
+    # shutil.copy(args.config, configs.run_dir)
+    shutil.copy(configs.config_dir, configs.run_dir)
+    
+    # grid search
+    configs.output_path = os.path.join(configs.run_dir, "grid_search.csv")  
+    os.makedirs(os.path.dirname(configs.output_path), exist_ok=True)
+    with open(configs.output_path, 'w+') as out:
+        writer = csv.writer(out)
+        writer.writerow(['batch_size','factor_learning_rate', 'learning_rate', 'weight_decay', 'Test Accuracy Score', 'Test F1-score'])
     
     lg.init(configs)
     
     DTYPE = torch.FloatTensor
     LONG = torch.LongTensor
+    
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        torch.backends.cudnn.benchmark = True
+    else:
+        device = torch.device("cpu")
+        torch.backends.cudnn.benchmark = False
 
     # parse the input args
     epochs = configs.run.n_epochs
@@ -97,14 +112,17 @@ def main(options):
     # params['text_dropout'] = [0.15,]
     # params['rank'] = [8,]
     
-    params['factor_learning_rate'] = [configs.optimizer.factor_lr, ]
-    params['learning_rate'] = [configs.optimizer.lr, ]
-    params['batch_size'] = [configs.dataset.batch_size, ]
-    params['weight_decay'] = [configs.optimizer.weight_decay, ]
+    params['batch_size'] = [configs.dataset.batch_size, ] if type(configs.dataset.batch_size) is not list else configs.dataset.batch_size
+    params['factor_learning_rate'] = [configs.optimizer.factor_lr, ] if type(configs.optimizer.factor_lr) is not list else configs.optimizer.factor_lr
+    params['learning_rate'] = [configs.optimizer.lr, ] if type(configs.optimizer.lr) is not list else configs.optimizer.lr
+    params['weight_decay'] = [configs.optimizer.weight_decay, ] if type(configs.optimizer.weight_decay) is not list else configs.optimizer.weight_decay
 
-    total_settings = total(params)
+    import itertools
+    # total_settings = total(params)
+    keys, values = zip(*params.items())
+    total_settings = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
-    # print("There are {} different hyper-parameter settings in total.".format(total_settings))
+    print("There are {} different hyper-parameter settings in total.".format(len(total_settings)))
 
     # seen_settings = set()
 
@@ -115,7 +133,14 @@ def main(options):
     #                         'factor_learning_rate', 'learning_rate', 'rank', 'batch_size', 'weight_decay', 
     #                         'Best Validation CrossEntropyLoss', 'Test CrossEntropyLoss', 'Test F1-score', 'Test Accuracy Score'])
 
-    for i in range(total_settings):
+    # for i in range(total_settings):
+    for setting in total_settings:
+        # print(setting)
+        factor_lr = setting['factor_learning_rate']
+        lr = setting['learning_rate']
+        batch_sz = setting['batch_size']
+        decay = setting['weight_decay']
+        
 
         # ahid = random.choice(params['audio_hidden'])
         # vhid = random.choice(params['video_hidden'])
@@ -143,14 +168,9 @@ def main(options):
         #     DTYPE = torch.cuda.FloatTensor
         #     LONG = torch.cuda.LongTensor
         
-        factor_lr = random.choice(params['factor_learning_rate'])
-        lr = random.choice(params['learning_rate'])
-        batch_sz = random.choice(params['batch_size'])
-        decay = random.choice(params['weight_decay'])
-        
         from utils import build_fusion_model
         model = build_fusion_model()
-        # model = model.to(device)
+        model = model.to(device)
         lg.info(model)
         lg.info(str(os.getpid()))
         
@@ -182,10 +202,10 @@ def main(options):
         model.eval()
         for batch in valid_iterator:
             x = batch[:-1]
-            x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
-            x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
-            x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
-            y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+            x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
+            x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
+            x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
+            y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
             output = model(x_a, x_v, x_t)
             valid_loss = criterion(output, torch.max(y, 1)[1])
             avg_valid_loss = valid_loss.item()
@@ -216,10 +236,10 @@ def main(options):
                 model.zero_grad()
 
                 x = batch[:-1]
-                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
-                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
-                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
-                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
+                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
+                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
+                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
                 try:
                     output = model(x_a, x_v, x_t)
                 except ValueError as e:
@@ -250,10 +270,10 @@ def main(options):
             model.eval()
             for batch in valid_iterator:
                 x = batch[:-1]
-                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
-                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
-                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
-                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
+                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
+                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
+                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
                 output = model(x_a, x_v, x_t)
                 valid_loss = criterion(output, torch.max(y, 1)[1])
                 avg_valid_loss = valid_loss.item()
@@ -294,10 +314,10 @@ def main(options):
             model.eval()
             for batch in test_iterator:
                 x = batch[:-1]
-                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False)
-                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False)
-                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False)
-                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False)
+                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
+                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
+                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
+                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
                 output_test = model(x_a, x_v, x_t)
                 loss_test = criterion(output_test, torch.max(y, 1)[1])
                 test_loss = loss_test.item()
@@ -313,11 +333,11 @@ def main(options):
             acc_score = accuracy_score(all_true_label, all_predicted_label)
 
             display(f1, acc_score)
+            lg.info(f"Param bz: {batch_sz}, lr: {lr}, factor_lr:{factor_lr}, weight_devcay:{decay}" + "Test acc: {:.4f}, Test F1: {:.4f}".format(acc_score, f1))
 
-            # with open(output_path, 'a+') as out:
-            #     writer = csv.writer(out)
-            #     writer.writerow([ahid, vhid, thid, adr, vdr, tdr, factor_lr, lr, r, batch_sz, decay, 
-            #                     min_valid_loss, test_loss, f1, acc_score])
+            with open(configs.output_path, 'a+') as out:
+                writer = csv.writer(out)
+                writer.writerow([batch_sz, factor_lr, lr, decay, acc_score, f1])
 
 
 if __name__ == "__main__":
@@ -338,6 +358,7 @@ if __name__ == "__main__":
     OPTIONS.add_argument("config", metavar="FILE", help="config file")
     args, opts = OPTIONS.parse_known_args()
     configs.load(args.config, recursive=True)
+    configs.config_dir = args.config
     # configs.update(opts)
     
     PARAMS = vars(OPTIONS.parse_args())

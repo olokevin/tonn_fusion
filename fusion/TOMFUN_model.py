@@ -311,7 +311,7 @@ class FusionLayer(nn.Module):
             self.audio_factor = TTM_Linear_module(
                   in_features=self.audio_out+1 if self.FUSION_TYPE == 'add' else self.audio_out, 
                   out_features=rank*output_dim, 
-                  bias=True, 
+                  bias=None, 
                   shape=self.audio_shape, 
                   tensor_type='TensorTrainMatrix', 
                   max_rank=max_rank,
@@ -330,7 +330,7 @@ class FusionLayer(nn.Module):
             self.video_factor = TTM_Linear_module(
                   in_features=self.video_out+1 if self.FUSION_TYPE == 'add' else self.video_out,
                   out_features=rank*output_dim, 
-                  bias=True, 
+                  bias=None, 
                   shape=self.video_shape, 
                   tensor_type='TensorTrainMatrix', 
                   max_rank=max_rank,
@@ -349,7 +349,7 @@ class FusionLayer(nn.Module):
             self.text_factor = TTM_Linear_module(
                   in_features=self.text_out+1 if self.FUSION_TYPE == 'add' else self.text_out,
                   out_features=rank*output_dim, 
-                  bias=True, 
+                  bias=None, 
                   shape=self.text_shape, 
                   tensor_type='TensorTrainMatrix', 
                   max_rank=max_rank,
@@ -539,7 +539,7 @@ class TOMFUN(SparseBP_Base):
               attention_shape = [[[5,4,3,5],[5,4,3,5]],[[5,4,3,5],[5,4,3,5]]], attention_rank = [ATTN_rank,ATTN_rank],attention_tensor_type = 'TensorTrainMatrix',
               ffn_shape = [[[5,4,3,5],[5,4,3,5]],[[5,4,3,5],[5,4,3,5]]], ffn_rank = [ATTN_rank,ATTN_rank],ffn_tensor_type = 'TensorTrainMatrix',
               d_classifier=self.d_inner, num_class = self.text_out, dropout_classifier = 0.2,
-              classifier_shape = [[5,4,3,5],[5,4,3,5]],classifier_rank = ATTN_rank,classifier_tensor_type = 'TensorTrainMatrix',
+              classifier_shape = [[5,4,3,5],[4,2,2,4]],classifier_rank = ATTN_rank,classifier_tensor_type = 'TensorTrainMatrix',
               bit_attn = 8, scale_attn = 2**(-5), 
               bit_ffn = 8, scale_ffn = 2**(-5),
               bit_a = 8, scale_a = 2**(-5),

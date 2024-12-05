@@ -31,39 +31,39 @@ run:
 model:
   name: LMF
 
-  # input_dims: [80,36,300,20]
-  input_dims: [74,35,300,20]
+  input_dims: [80,36,300,20]
+  # input_dims: [74,35,300,20]
 
-  hidden_dims: [8,4,64]
-  FUSION_TYPE: 'add'
-  sub_out_dims: [8,4,32]
-  # sub_out_dims: [7,3,63]
-  # FUSION_TYPE: 'replace'
-  # sub_out_dims: [8,4,64]
+  # hidden_dims: [8,4,64]
+  # FUSION_TYPE: 'add'
+  # sub_out_dims: [8,4,32]
+  # # sub_out_dims: [7,3,63]
+  # # FUSION_TYPE: 'replace'
+  # # sub_out_dims: [8,4,64]
 
-  # hidden_dims: [32,32,64]
-  # # FUSION_TYPE: 'add'
-  # # sub_out_dims: [32,32,64]
-  # # sub_out_dims: [31,31,63]
-  # FUSION_TYPE: 'replace'
-  # sub_out_dims: [32,32,64]
-  
+  hidden_dims: [32,32,64]
+  # FUSION_TYPE: 'add'
+  # sub_out_dims: [32,32,32]
+  # FUSION_TYPE: 'add'
+  # sub_out_dims: [31,31,31]
+  FUSION_TYPE: 'replace'
+  sub_out_dims: [32,32,64]
   dropouts: [0.3,0.1,0.15,0.5]
   output_dim: 2
   rank: 8
   
-  TT_ATTN: False
-  # TT_ATTN: True
+  # TT_ATTN: False
+  TT_ATTN: True
   n_layers: 2
   n_head: 3
   ATTN_rank: 4
   
-  TT_FUSION: False
-  # TT_FUSION: True
+  # TT_FUSION: False
+  TT_FUSION: True
   TT_FUSION_rank: 4
 
-  TT_SUBNET: False
-  # TT_SUBNET: True
+  # TT_SUBNET: False
+  TT_SUBNET: True
   TT_SUBNET_rank: 4
   # tensor_type: 'TTM'
   tensor_type: 'TensorTrainMatrix'  
