@@ -6,18 +6,18 @@ dataset:
   batch_size: 64
   num_workers: 4
   shuffle: True
-  seed: 42
 
 criterion:
   name: ce
 
 optimizer:
   name: adam
-  factor_lr: 0.003
+  factor_lr: 0.001
+  lr: 0.001
+  weight_decay: 0
+
   # factor_lr: [0.0003, 0.0005, 0.001, 0.003]
-  lr: 0.0005
   # lr: [0.0003, 0.0005, 0.001, 0.003]
-  weight_decay: 0.001
   # weight_decay: [0, 0.001, 0.002, 0.01]
 
 scheduler:
@@ -30,6 +30,7 @@ run:
   model_path_dir: './tt_models/'
   signiture: 'lmf'
   patience: 20
+  random_state: 42
 
 model:
   name: TOMFUN
@@ -37,9 +38,9 @@ model:
   # mzi_noise: False
 
   miniblock: 8
-  mode: "weight"
+  # mode: "weight"
   # mode: "usv"
-  # mode: "phase"
+  mode: "phase"
   act_thres: 2.0
 
   input_dims: [80,36,300,20]
@@ -71,7 +72,7 @@ model:
   
   # TT_FUSION: False
   TT_FUSION: True
-  TT_FUSION_rank: 4
+  TT_FUSION_rank: 2
 
   # TT_SUBNET: False
   TT_SUBNET: True
@@ -90,7 +91,6 @@ noise:
   phase_bias: 1
   gamma_noise_std: 0.002
   crosstalk_factor: 0.005
-  random_state: 42
 
 ic: # identity calibration
   alg: zcd # [zgd, ztp, zcd]

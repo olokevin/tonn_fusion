@@ -81,10 +81,10 @@ def build_fusion_model():
             # inject non-ideality
             # deterministic phase bias
             if configs.noise.phase_bias:
-                model.assign_random_phase_bias(random_state=int(configs.noise.random_state))
+                model.assign_random_phase_bias(random_state=int(configs.run.random_state))
             # deterministic phase shifter gamma noise
             model.set_gamma_noise(
-                float(configs.noise.gamma_noise_std), random_state=int(configs.noise.random_state)
+                float(configs.noise.gamma_noise_std), random_state=int(configs.run.random_state)
             )
             # deterministic phase shifter crosstalk
             model.set_crosstalk_factor(float(configs.noise.crosstalk_factor))

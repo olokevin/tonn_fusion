@@ -30,7 +30,12 @@ def display(f1_score, accuracy_score):
 
 def main(options):
 
-    set_torch_deterministic(0) 
+    if hasattr(configs.run, "random_state"):
+        set_torch_deterministic(configs.run.random_state) 
+    else:
+        configs.run.random_state = 42
+        set_torch_deterministic(configs.run.random_state)
+        
     configs.run_dir = os.path.join(
             "./tt_runs",
             # f'TT_ATTN_{configs.model.TT_ATTN}',
@@ -48,6 +53,7 @@ def main(options):
     os.makedirs(os.path.dirname(configs.output_path), exist_ok=True)
     with open(configs.output_path, 'w+') as out:
         writer = csv.writer(out)
+        writer.writerow([str(os.getpid()),])
         writer.writerow(['batch_size','factor_learning_rate', 'learning_rate', 'weight_decay', 'Test Accuracy Score', 'Test F1-score'])
     
     lg.init(configs)
@@ -134,7 +140,7 @@ def main(options):
     #                         'Best Validation CrossEntropyLoss', 'Test CrossEntropyLoss', 'Test F1-score', 'Test Accuracy Score'])
 
     # for i in range(total_settings):
-    for setting in total_settings:
+    for i_set, setting in enumerate(total_settings):
         # print(setting)
         factor_lr = setting['factor_learning_rate']
         lr = setting['learning_rate']
@@ -171,8 +177,10 @@ def main(options):
         from utils import build_fusion_model
         model = build_fusion_model()
         model = model.to(device)
-        lg.info(model)
-        lg.info(str(os.getpid()))
+        
+        if i_set == 0:
+            lg.info(model)
+            lg.info(str(os.getpid()))
         
         print("Model initialized")
         criterion = nn.CrossEntropyLoss(size_average=False)
@@ -337,7 +345,7 @@ def main(options):
 
             with open(configs.output_path, 'a+') as out:
                 writer = csv.writer(out)
-                writer.writerow([batch_sz, factor_lr, lr, decay, acc_score, f1])
+                writer.writerow([batch_sz, factor_lr, lr, decay, round(acc_score, 4), round(f1,4)])
 
 
 if __name__ == "__main__":
