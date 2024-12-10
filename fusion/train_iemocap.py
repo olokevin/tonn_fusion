@@ -54,7 +54,7 @@ def main(options):
     with open(configs.output_path, 'w+') as out:
         writer = csv.writer(out)
         writer.writerow([str(os.getpid()),])
-        writer.writerow(['batch_size','factor_learning_rate', 'learning_rate', 'weight_decay', 'Test Accuracy Score', 'Test F1-score'])
+        # writer.writerow(['batch_size','factor_learning_rate', 'learning_rate', 'weight_decay', 'Test Accuracy Score', 'Test F1-score'])
     
     lg.init(configs)
     
@@ -62,7 +62,7 @@ def main(options):
     LONG = torch.LongTensor
     
     if torch.cuda.is_available():
-        device = torch.device("cuda:0")
+        device = torch.device("cuda")
         torch.backends.cudnn.benchmark = True
     else:
         device = torch.device("cpu")
@@ -175,7 +175,7 @@ def main(options):
         #     LONG = torch.cuda.LongTensor
         
         from utils import build_fusion_model
-        model = build_fusion_model()
+        model = build_fusion_model(device=device)
         model = model.to(device)
         
         if i_set == 0:
@@ -345,7 +345,7 @@ def main(options):
 
             with open(configs.output_path, 'a+') as out:
                 writer = csv.writer(out)
-                writer.writerow([batch_sz, factor_lr, lr, decay, round(acc_score, 4), round(f1,4)])
+                writer.writerow([batch_sz, round(factor_lr, 4), round(lr, 4), round(decay, 3), round(acc_score, 4), round(f1,4)])
 
 
 if __name__ == "__main__":

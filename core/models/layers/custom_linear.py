@@ -681,7 +681,21 @@ class MZIBlockLinear(torch.nn.Module):
     def build_weight(self, update_list: Dict = {"phase_U", "phase_S", "phase_V"}) -> Tensor:
         if self.mode == "weight":  # does not support weight quantization
             return self.weight
-        elif self.mode == "usv":  # does not support usv quantization
+        elif self.mode == "usv":  
+            # 1210 support s quantization
+            with torch.no_grad():
+                # build phase from s                
+                self.S_scale.data.copy_(self.S.data.abs().max(dim=-1, keepdim=True)[0])
+                self.phase_S.data.copy_(self.S.data.div(self.S_scale.data).acos())
+                
+                # phase_S_quantizer contains optical noise
+                if self.w_bit < 16:
+                    phase_S = self.phase_S_quantizer(self.phase_S.data)
+                else:
+                    phase_S = self.phase_S
+                    
+                self.S.data.copy_(phase_S.data.cos().mul_(self.S_scale))
+                
             return self.U, self.S, self.V
         elif self.mode == "phase":
             ### not differentiable
@@ -1092,6 +1106,7 @@ class MZIBlockLinear(torch.nn.Module):
             out = F.linear(x, weight, bias=bias)
         else:
             u, s, v = weight
+
             out = sparse_bp_linear(
                 x,
                 u,

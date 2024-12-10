@@ -18,7 +18,7 @@ TRAIN = b'train'
 VALID = b'valid'
 TEST = b'test'
 
-def build_fusion_model():
+def build_fusion_model(device):
     if configs.model.name == 'LMF':
         model = LMF(
             input_dims = configs.model.input_dims, 
@@ -43,7 +43,7 @@ def build_fusion_model():
             TT_SUBNET_rank = configs.model.TT_SUBNET_rank,
 
             # device = torch.device("cuda:" + str(configs.run.gpu_id)), 
-            device = torch.device("cpu"), 
+            device = device, 
             dtype = torch.float32, 
             use_softmax=False
         )
@@ -72,12 +72,20 @@ def build_fusion_model():
             TT_SUBNET_rank = configs.model.TT_SUBNET_rank,
 
             # device = torch.device("cuda:" + str(configs.run.gpu_id)), 
-            device = torch.device("cpu"), 
+            device = device, 
+            # device = torch.device("cpu"), 
             dtype = torch.float32, 
             use_softmax=False
         )
         
-        if configs.model.mzi_noise is True:
+        ### add MZI noise
+        if configs.model.mzi_noise is True:            
+            if configs.model.mode == "phase":
+                pass
+            else:
+                model.switch_mode_to("phase")
+                model.sync_parameters(src=configs.model.mode)
+            
             # inject non-ideality
             # deterministic phase bias
             if configs.noise.phase_bias:
@@ -92,10 +100,28 @@ def build_fusion_model():
             model.set_weight_bitwidth(int(configs.quantize.w_bit))
             # enable/disable noisy identity
             model.set_noisy_identity(int(configs.sl.noisy_identity))
+            
+            if configs.model.mode == "phase":
+                pass
+            else:
+                model.switch_mode_to(configs.model.mode)
+                model.sync_parameters(src="phase")
+        
+        ### phase mode subspace leraning
+        if configs.model.mode == "phase":
+            from core.models import MZIBlockLinear, MZIBlockConv2d
+            for module in model.modules():
+                if isinstance(module, (MZIBlockLinear, MZIBlockConv2d)):
+                    S = (module.phase_S.data.cos().mul_(module.S_scale))
+                    module.S = torch.nn.Parameter(S)
+                    module.register_full_backward_hook(bwd_hook_phase_S_grad)
         
         return model
     else:
         raise ValueError("Model name not supported")
+
+def bwd_hook_phase_S_grad(module, grad_input, grad_output):
+    module.phase_S.grad = (- module.S.grad.data * module.phase_S.data.sin() * module.S_scale.data)
 
 def build_fusion_dataloader():
     if configs.dataset.name == "iemocap":

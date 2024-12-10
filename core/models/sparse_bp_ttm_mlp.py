@@ -269,7 +269,7 @@ class TTM_Linear_module(nn.Module):
         em_stepsize=1.0,
         prior_type='log_uniform',
         eta = None,
-        device=None,
+        device=torch.device("cuda"),
         dtype=None,
         # L2ight
         miniblock: int = 8,
