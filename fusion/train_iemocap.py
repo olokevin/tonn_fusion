@@ -30,12 +30,6 @@ def display(f1_score, accuracy_score):
 
 def main(options):
 
-    if hasattr(configs.run, "random_state"):
-        set_torch_deterministic(configs.run.random_state) 
-    else:
-        configs.run.random_state = 42
-        set_torch_deterministic(configs.run.random_state)
-        
     configs.run_dir = os.path.join(
             "./tt_runs",
             # f'TT_ATTN_{configs.model.TT_ATTN}',
@@ -46,7 +40,9 @@ def main(options):
         )
     os.makedirs(configs.run_dir, exist_ok=True)
     # shutil.copy(args.config, configs.run_dir)
-    shutil.copy(configs.config_dir, configs.run_dir)
+    run_dir_config_path = os.path.join(configs.run_dir, "config.yml")  
+    os.makedirs(os.path.dirname(run_dir_config_path), exist_ok=True)
+    shutil.copyfile(configs.config_dir, run_dir_config_path)
     
     # grid search
     configs.output_path = os.path.join(configs.run_dir, "grid_search.csv")  
@@ -174,6 +170,14 @@ def main(options):
         #     DTYPE = torch.cuda.FloatTensor
         #     LONG = torch.cuda.LongTensor
         
+        
+        ### Reset seed for each sub run
+        if hasattr(configs.run, "random_state"):
+            set_torch_deterministic(configs.run.random_state) 
+        else:
+            configs.run.random_state = 42
+            set_torch_deterministic(configs.run.random_state)
+        
         from utils import build_fusion_model
         model = build_fusion_model(device=device)
         model = model.to(device)
@@ -208,7 +212,7 @@ def main(options):
         
         # test before training
         model.eval()
-        for batch in valid_iterator:
+        for batch in test_iterator:
             x = batch[:-1]
             x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
             x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
@@ -341,7 +345,7 @@ def main(options):
             acc_score = accuracy_score(all_true_label, all_predicted_label)
 
             display(f1, acc_score)
-            lg.info(f"Param bz: {batch_sz}, lr: {lr}, factor_lr:{factor_lr}, weight_devcay:{decay}" + "Test acc: {:.4f}, Test F1: {:.4f}".format(acc_score, f1))
+            lg.info(f"Param bz: {batch_sz}, factor_lr:{factor_lr}, lr: {lr}, weight_devcay:{decay}" + "Test acc: {:.4f}, Test F1: {:.4f}".format(acc_score, f1))
 
             with open(configs.output_path, 'a+') as out:
                 writer = csv.writer(out)

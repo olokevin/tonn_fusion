@@ -30,9 +30,9 @@ class ExpLogger:
         assert configs.run_dir is not None, 'Empty run directory!'
         
         # dumping running configs
-        _path = os.path.join(configs.run_dir, 'config.yaml')
-        with open(_path, 'w') as f:
-            yaml.dump(configs2dict(configs), f)
+        # _path = os.path.join(configs.run_dir, 'config.yaml')
+        # with open(_path, 'w') as f:
+        #     yaml.dump(configs2dict(configs), f)
 
         # also dump running log to file
         _logger.add(os.path.join(configs.run_dir, 'exp.log'))

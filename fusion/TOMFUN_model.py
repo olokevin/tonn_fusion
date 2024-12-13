@@ -194,7 +194,9 @@ class TextSubNet_attention(nn.Module):
             bit_ffn = 8, scale_ffn = 2**(-5),
             bit_a = 8, scale_a = 2**(-5),
             quantized = False,
-            tensorized=True):
+            tensorized=True,
+            device='cuda'
+            ):
 
         super().__init__()
         
@@ -207,7 +209,9 @@ class TextSubNet_attention(nn.Module):
             bit_ffn = bit_ffn, scale_ffn = scale_ffn,
             bit_a = bit_a, scale_a = scale_a,
             quantized=quantized,
-            tensorized=tensorized)
+            tensorized=tensorized,
+            device=device
+            )
         
         # self.preclassifier = nn.Linear(d_model,d_classifier)
 
@@ -219,7 +223,7 @@ class TextSubNet_attention(nn.Module):
                 shape=classifier_shape, 
                 tensor_type='TensorTrainMatrix', 
                 max_rank=classifier_rank,
-                # device=device, 
+                device=device, 
                 # dtype=dtype,
                 miniblock=configs.model.miniblock,
                 mode=configs.model.mode,

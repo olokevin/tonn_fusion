@@ -21,7 +21,8 @@ class TONN_Encoder(nn.Module):
             quantized = False,
             tensorized=True,
             uncompressed=0,
-            embedded=True):
+            embedded=True,
+            device='cuda'):
 
         super().__init__()
 
@@ -59,7 +60,7 @@ class TONN_Encoder(nn.Module):
             bit_attn = bit_attn, scale_attn = scale_attn, 
             bit_ffn = bit_ffn, scale_ffn = scale_ffn,
             bit_a = bit_a, scale_a = scale_a,
-            quantized=quantized)
+            quantized=quantized, device=device)
             for _ in range(n_layers)])
 
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-12)
@@ -145,7 +146,8 @@ class TONN_EncoderLayer(nn.Module):
                 bit_ffn = 8, scale_ffn = 2**(-5),
                 bit_a = 8, scale_a = 2**(-5),
                 quantized = False,
-                tensorized=True):
+                tensorized=True,
+                device='cuda'):
         super(TONN_EncoderLayer, self).__init__()
         
         # self.en_ffn = True
@@ -154,13 +156,13 @@ class TONN_EncoderLayer(nn.Module):
         if tensorized:
             self.slf_attn = Tensor_Attention(d_model,d_q,d_k,d_v,n_head, dropout=dropout,shape=attention_shape,rank=attention_rank,tensor_type=attention_tensor_type,
             bit_w=bit_attn,scale_w=scale_attn,
-            quantized=quantized)
+            quantized=quantized, device=device)
             
             if self.en_ffn:
                 self.pos_ffn = Tensor_PFF(d_model, d_inner, dropout=dropout,shape=ffn_shape,rank=ffn_rank,tensor_type=ffn_tensor_type,
                 bit_w=bit_ffn,scale_w=scale_ffn,
                 bit_a=bit_a, scale_a=scale_a,
-                quantized=quantized)
+                quantized=quantized, device=device) 
         else:
             raise NotImplementedError
             # self.slf_attn = MultiHeadAttention(n_head, d_model, d_k, d_v, dropout=dropout)
@@ -180,7 +182,7 @@ class Tensor_Attention(nn.Module):
 
     def __init__(self, d_model,d_q,d_k,d_v, n_head, shape = [[4,4,8,4,4,4,8,4],[4,4,8,4,4,4,8,4]], rank=[20,20],tensor_type = 'TensorTrain', dropout=0.1,
                 bit_w = 8, scale_w = 2**(-5), 
-                quantized = False):
+                quantized = False, device='cuda'):
         super().__init__()
 
 
@@ -201,6 +203,7 @@ class Tensor_Attention(nn.Module):
                 tensor_type='TensorTrainMatrix', 
                 max_rank=rank[0],
                 em_stepsize=em_stepsize,
+                device=device, 
                 miniblock=configs.model.miniblock,
                 mode=configs.model.mode,
                 v_max=configs.quantize.v_max,
@@ -219,6 +222,7 @@ class Tensor_Attention(nn.Module):
                 tensor_type='TensorTrainMatrix', 
                 max_rank=rank[0],
                 em_stepsize=em_stepsize,
+                device=device, 
                 miniblock=configs.model.miniblock,
                 mode=configs.model.mode,
                 v_max=configs.quantize.v_max,
@@ -237,6 +241,7 @@ class Tensor_Attention(nn.Module):
                 tensor_type='TensorTrainMatrix', 
                 max_rank=rank[0],
                 em_stepsize=em_stepsize,
+                device=device, 
                 miniblock=configs.model.miniblock,
                 mode=configs.model.mode,
                 v_max=configs.quantize.v_max,
@@ -255,6 +260,7 @@ class Tensor_Attention(nn.Module):
                 tensor_type='TensorTrainMatrix', 
                 max_rank=rank[1],
                 em_stepsize=em_stepsize,
+                device=device, 
                 miniblock=configs.model.miniblock,
                 mode=configs.model.mode,
                 v_max=configs.quantize.v_max,
@@ -330,7 +336,7 @@ class Tensor_PFF(nn.Module):
     def __init__(self, d_in, d_hid, shape = [[4,4,8,4,4,4,8,4],[4,4,8,4,4,4,8,4]], rank=[20,20], dropout=0.1,tensor_type = 'TensorTrain',
                 bit_w = 8, scale_w = 2**(-5), 
                 bit_a = 8, scale_a = 2**(-5), 
-                quantized = False):
+                quantized = False, device='cuda'):
         super().__init__()
         
         em_stepsize = 1.0
@@ -346,6 +352,7 @@ class Tensor_PFF(nn.Module):
                 tensor_type='TensorTrainMatrix', 
                 max_rank=rank[0],
                 em_stepsize=em_stepsize,
+                device=device, 
                 miniblock=configs.model.miniblock,
                 mode=configs.model.mode,
                 v_max=configs.quantize.v_max,
@@ -364,6 +371,7 @@ class Tensor_PFF(nn.Module):
                 tensor_type='TensorTrainMatrix', 
                 max_rank=rank[1],
                 em_stepsize=em_stepsize,
+                device=device, 
                 miniblock=configs.model.miniblock,
                 mode=configs.model.mode,
                 v_max=configs.quantize.v_max,

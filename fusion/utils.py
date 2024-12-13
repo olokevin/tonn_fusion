@@ -78,6 +78,12 @@ def build_fusion_model(device):
             use_softmax=False
         )
         
+        ### load pre-trained model
+        if hasattr(configs, "pretrain") and configs.pretrain.model_path is not None:
+            model.load_state_dict(torch.load(configs.pretrain.model_path))
+            model.switch_mode_to(configs.model.mode)
+            model.sync_parameters(src=configs.pretrain.mode)
+        
         ### add MZI noise
         if configs.model.mzi_noise is True:            
             if configs.model.mode == "phase":
