@@ -958,14 +958,14 @@ class MZIBlockLinear(torch.nn.Module):
     def switch_mode_to(self, mode: str) -> None:
         self.mode = mode
 
-    def assign_random_phase_bias(self, random_state: int = 42) -> None:
+    def assign_random_phase_bias(self, random_state: int = 42, noise_std: float = 1) -> None:
         ### [-1, 1]
         if random_state is not None:
             set_torch_deterministic(random_state)
-        self.phase_bias_U = torch.rand_like(self.phase_U.data) * 2 - 1
+        self.phase_bias_U = (torch.rand_like(self.phase_U.data) * 2 - 1) * noise_std
         if random_state is not None:
             set_torch_deterministic(random_state + 1)
-        self.phase_bias_V = torch.rand_like(self.phase_V.data) * 2 - 1
+        self.phase_bias_V = (torch.rand_like(self.phase_V.data) * 2 - 1) * noise_std
 
     def clear_phase_bias(self) -> None:
         self.phase_bias_U.fill_(0)

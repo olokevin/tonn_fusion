@@ -172,10 +172,10 @@ class SparseBP_Base(nn.Module):
             if isinstance(layer, (MZIBlockLinear, MZIBlockConv2d)):
                 layer.switch_mode_to(mode)
 
-    def assign_random_phase_bias(self, random_state: Optional[int] = 42) -> None:
+    def assign_random_phase_bias(self, random_state: Optional[int] = 42, noise_std: float = 1) -> None:
         for layer in self.modules():
             if isinstance(layer, (MZIBlockLinear, MZIBlockConv2d)):
-                layer.assign_random_phase_bias(random_state)
+                layer.assign_random_phase_bias(random_state, noise_std)
 
     def clear_phase_bias(self) -> None:
         for layer in self.modules():

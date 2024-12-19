@@ -94,8 +94,8 @@ def build_fusion_model(device):
             
             # inject non-ideality
             # deterministic phase bias
-            if configs.noise.phase_bias:
-                model.assign_random_phase_bias(random_state=int(configs.run.random_state))
+            # if configs.noise.phase_bias:
+            model.assign_random_phase_bias(random_state=int(configs.run.random_state), noise_std=float(configs.noise.phase_bias))
             # deterministic phase shifter gamma noise
             model.set_gamma_noise(
                 float(configs.noise.gamma_noise_std), random_state=int(configs.run.random_state)

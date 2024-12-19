@@ -118,6 +118,12 @@ def main(options):
     params['factor_learning_rate'] = [configs.optimizer.factor_lr, ] if type(configs.optimizer.factor_lr) is not list else configs.optimizer.factor_lr
     params['learning_rate'] = [configs.optimizer.lr, ] if type(configs.optimizer.lr) is not list else configs.optimizer.lr
     params['weight_decay'] = [configs.optimizer.weight_decay, ] if type(configs.optimizer.weight_decay) is not list else configs.optimizer.weight_decay
+    
+    if args.test_only:
+        params['random_state'] = [configs.run.random_state, ] if type(configs.run.random_state) is not list else configs.run.random_state
+        params['phase_bias'] = [configs.noise.phase_bias, ] if type(configs.noise.phase_bias) is not list else configs.noise.phase_bias
+        params['gamma_noise_std'] = [configs.noise.gamma_noise_std, ] if type(configs.noise.gamma_noise_std) is not list else configs.noise.gamma_noise_std
+        params['crosstalk_factor'] = [configs.noise.crosstalk_factor, ] if type(configs.noise.crosstalk_factor) is not list else configs.noise.crosstalk_factor
 
     import itertools
     # total_settings = total(params)
@@ -143,6 +149,11 @@ def main(options):
         batch_sz = setting['batch_size']
         decay = setting['weight_decay']
         
+        if args.test_only:  
+            configs.run.random_state = setting['random_state']
+            configs.noise.phase_bias = setting['phase_bias']
+            configs.noise.gamma_noise_std = setting['gamma_noise_std']
+            configs.noise.crosstalk_factor = setting['crosstalk_factor']
 
         # ahid = random.choice(params['audio_hidden'])
         # vhid = random.choice(params['video_hidden'])
@@ -239,117 +250,126 @@ def main(options):
         # print("Validation F1 is: {}".format(f1))
         lg.info("Epoch: 0, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(avg_valid_loss, avg_valid_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
         
-        for e in range(epochs):
-            ##### Training #####
-            model.train()
-            model.zero_grad()
-            avg_train_loss = 0.0
-            for batch in train_iterator:
-                model.zero_grad()
-
-                x = batch[:-1]
-                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
-                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
-                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
-                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
-                try:
-                    output = model(x_a, x_v, x_t)
-                except ValueError as e:
-                    print(x_a.data.shape)
-                    print(x_v.data.shape)
-                    print(x_t.data.shape)
-                    raise e
-                loss = criterion(output, torch.max(y, 1)[1])
-                loss.backward()
-                avg_loss = loss.item()
-                avg_train_loss += avg_loss / len(train_set)
-                optimizer.step()
-            
-                all_true_label = np.concatenate((all_true_label, np.argmax( y.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0)
-                all_predicted_label = np.concatenate((all_predicted_label,np.argmax(output.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0) 
-            
-            avg_train_accuracy = accuracy_score(all_true_label, all_predicted_label)
-
-            # print("Epoch {} complete! Average Training loss: {}".format(e, avg_train_loss))
-
-            # Terminate the training process if run into NaN
-            if np.isnan(avg_train_loss):
-                print("Training got into NaN values...\n\n")
-                complete = False
-                break
-
-            ##### Validation #####
-            model.eval()
-            for batch in valid_iterator:
-                x = batch[:-1]
-                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
-                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
-                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
-                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
-                output = model(x_a, x_v, x_t)
-                valid_loss = criterion(output, torch.max(y, 1)[1])
-                avg_valid_loss = valid_loss.item()
-            y = y.cpu().data.numpy().reshape(-1, output_dim)
-
-            if np.isnan(avg_valid_loss):
-                print("Training got into NaN values...\n\n")
-                complete = False
-                break
-
-            avg_valid_loss = avg_valid_loss / len(valid_set)
-            # print("Validation loss is: {}".format(avg_valid_loss))
-            
-            all_true_label = np.argmax(y,axis=1)
-            all_predicted_label = np.argmax(output.detach().cpu(),axis=1)
-            avg_valid_accuracy = accuracy_score(all_true_label, all_predicted_label)
-            f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
-            # print("Validation F1 is: {}".format(f1))
-
-            if (avg_valid_loss < min_valid_loss):
-                curr_patience = patience
-                min_valid_loss = avg_valid_loss
-                # torch.save(model, model_path)
-                torch.save(model.state_dict(), os.path.join(configs.run_dir, "best_model.pt"))
-                # print("Found new best model, saving to disk...")
-            else:
-                curr_patience -= 1
-            
-            if curr_patience <= 0:
-                break
-            # print("\n")
-            
-            lg.info("Epoch: {}, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(e+1, avg_train_loss, avg_train_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
-
-        if complete:
-            
-            model.load_state_dict(torch.load(os.path.join(configs.run_dir, "best_model.pt")))
-            model.eval()
-            for batch in test_iterator:
-                x = batch[:-1]
-                x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
-                x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
-                x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
-                y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
-                output_test = model(x_a, x_v, x_t)
-                loss_test = criterion(output_test, torch.max(y, 1)[1])
-                test_loss = loss_test.item()
-            output_test = output_test.cpu().data.numpy().reshape(-1, output_dim)
-            y = y.cpu().data.numpy().reshape(-1, output_dim)
-            test_loss = test_loss / len(test_set)
-
-            # these are the needed metrics
-            all_true_label = np.argmax(y,axis=1)
-            all_predicted_label = np.argmax(output_test,axis=1)
-
-            f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
-            acc_score = accuracy_score(all_true_label, all_predicted_label)
-
-            display(f1, acc_score)
-            lg.info(f"Param bz: {batch_sz}, factor_lr:{factor_lr}, lr: {lr}, weight_devcay:{decay}" + "Test acc: {:.4f}, Test F1: {:.4f}".format(acc_score, f1))
+        if args.test_only:
+            lg.info(f"random_state: {configs.run.random_state}, phase_bias:{configs.noise.phase_bias}, gamma_noise_std: {configs.noise.gamma_noise_std}, crosstalk_factor:{configs.noise.crosstalk_factor}" + "Test acc: {:.4f}, Test F1: {:.4f}".format(avg_valid_accuracy, f1))
 
             with open(configs.output_path, 'a+') as out:
                 writer = csv.writer(out)
-                writer.writerow([batch_sz, round(factor_lr, 4), round(lr, 4), round(decay, 3), round(acc_score, 4), round(f1,4)])
+                # writer.writerow([configs.run.random_state, configs.noise.phase_bias, configs.noise.gamma_noise_std, configs.noise.crosstalk_factor, round(avg_valid_accuracy, 4), round(f1,4)])
+                writer.writerow([round(f1,4)])
+
+        else:
+            for e in range(epochs):
+                ##### Training #####
+                model.train()
+                model.zero_grad()
+                avg_train_loss = 0.0
+                for batch in train_iterator:
+                    model.zero_grad()
+
+                    x = batch[:-1]
+                    x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
+                    x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
+                    x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
+                    y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
+                    try:
+                        output = model(x_a, x_v, x_t)
+                    except ValueError as e:
+                        print(x_a.data.shape)
+                        print(x_v.data.shape)
+                        print(x_t.data.shape)
+                        raise e
+                    loss = criterion(output, torch.max(y, 1)[1])
+                    loss.backward()
+                    avg_loss = loss.item()
+                    avg_train_loss += avg_loss / len(train_set)
+                    optimizer.step()
+                
+                    all_true_label = np.concatenate((all_true_label, np.argmax( y.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0)
+                    all_predicted_label = np.concatenate((all_predicted_label,np.argmax(output.cpu().data.numpy().reshape(-1, output_dim),axis=1)), axis=0) 
+                
+                avg_train_accuracy = accuracy_score(all_true_label, all_predicted_label)
+
+                # print("Epoch {} complete! Average Training loss: {}".format(e, avg_train_loss))
+
+                # Terminate the training process if run into NaN
+                if np.isnan(avg_train_loss):
+                    print("Training got into NaN values...\n\n")
+                    complete = False
+                    break
+
+                ##### Validation #####
+                model.eval()
+                for batch in valid_iterator:
+                    x = batch[:-1]
+                    x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
+                    x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
+                    x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
+                    y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
+                    output = model(x_a, x_v, x_t)
+                    valid_loss = criterion(output, torch.max(y, 1)[1])
+                    avg_valid_loss = valid_loss.item()
+                y = y.cpu().data.numpy().reshape(-1, output_dim)
+
+                if np.isnan(avg_valid_loss):
+                    print("Training got into NaN values...\n\n")
+                    complete = False
+                    break
+
+                avg_valid_loss = avg_valid_loss / len(valid_set)
+                # print("Validation loss is: {}".format(avg_valid_loss))
+                
+                all_true_label = np.argmax(y,axis=1)
+                all_predicted_label = np.argmax(output.detach().cpu(),axis=1)
+                avg_valid_accuracy = accuracy_score(all_true_label, all_predicted_label)
+                f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
+                # print("Validation F1 is: {}".format(f1))
+
+                if (avg_valid_loss < min_valid_loss):
+                    curr_patience = patience
+                    min_valid_loss = avg_valid_loss
+                    # torch.save(model, model_path)
+                    torch.save(model.state_dict(), os.path.join(configs.run_dir, "best_model.pt"))
+                    # print("Found new best model, saving to disk...")
+                else:
+                    curr_patience -= 1
+                
+                if curr_patience <= 0:
+                    break
+                # print("\n")
+                
+                lg.info("Epoch: {}, Train loss: {:.4f}, Train acc: {:.4f}, Val loss: {:.4f}, Val acc: {:.4f}, Val F1: {:.4f}".format(e+1, avg_train_loss, avg_train_accuracy, avg_valid_loss, avg_valid_accuracy, f1))
+
+            if complete:
+                
+                model.load_state_dict(torch.load(os.path.join(configs.run_dir, "best_model.pt")))
+                model.eval()
+                for batch in test_iterator:
+                    x = batch[:-1]
+                    x_a = Variable(x[0].float().type(DTYPE), requires_grad=False).to(device)
+                    x_v = Variable(x[1].float().type(DTYPE), requires_grad=False).to(device)
+                    x_t = Variable(x[2].float().type(DTYPE), requires_grad=False).to(device)
+                    y = Variable(batch[-1].view(-1, output_dim).float().type(LONG), requires_grad=False).to(device)
+                    output_test = model(x_a, x_v, x_t)
+                    loss_test = criterion(output_test, torch.max(y, 1)[1])
+                    test_loss = loss_test.item()
+                output_test = output_test.cpu().data.numpy().reshape(-1, output_dim)
+                y = y.cpu().data.numpy().reshape(-1, output_dim)
+                test_loss = test_loss / len(test_set)
+
+                # these are the needed metrics
+                all_true_label = np.argmax(y,axis=1)
+                all_predicted_label = np.argmax(output_test,axis=1)
+
+                f1 = f1_score(all_true_label, all_predicted_label, average='weighted')
+                acc_score = accuracy_score(all_true_label, all_predicted_label)
+
+                display(f1, acc_score)
+                lg.info(f"Param bz: {batch_sz}, factor_lr:{factor_lr}, lr: {lr}, weight_devcay:{decay}" + "Test acc: {:.4f}, Test F1: {:.4f}".format(acc_score, f1))
+
+                with open(configs.output_path, 'a+') as out:
+                    writer = csv.writer(out)
+                    writer.writerow([batch_sz, round(factor_lr, 4), round(lr, 4), round(decay, 3), round(acc_score, 4), round(f1,4)])
 
 
 if __name__ == "__main__":
@@ -368,10 +388,11 @@ if __name__ == "__main__":
     #                      type=str, default='results')
     
     OPTIONS.add_argument("config", metavar="FILE", help="config file")
+    OPTIONS.add_argument('--test_only', action='store_true', default=False, help="test")
     args, opts = OPTIONS.parse_known_args()
     configs.load(args.config, recursive=True)
     configs.config_dir = args.config
-    # configs.update(opts)
+    configs.update(opts)
     
     PARAMS = vars(OPTIONS.parse_args())
     main(PARAMS)
