@@ -93,12 +93,14 @@ def build_fusion_model(device):
                 model.sync_parameters(src=configs.model.mode)
             
             # inject non-ideality
+            noise_random_state = int(configs.run.random_state)
+            # noise_random_state = 42
             # deterministic phase bias
-            # if configs.noise.phase_bias:
-            model.assign_random_phase_bias(random_state=int(configs.run.random_state), noise_std=float(configs.noise.phase_bias))
+            if float(configs.noise.phase_bias) > 0.0:
+                model.assign_random_phase_bias(random_state=noise_random_state, noise_std=float(configs.noise.phase_bias))
             # deterministic phase shifter gamma noise
             model.set_gamma_noise(
-                float(configs.noise.gamma_noise_std), random_state=int(configs.run.random_state)
+                float(configs.noise.gamma_noise_std), random_state=noise_random_state
             )
             # deterministic phase shifter crosstalk
             model.set_crosstalk_factor(float(configs.noise.crosstalk_factor))

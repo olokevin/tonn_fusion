@@ -20,11 +20,11 @@ optimizer:
   # lr: 0.003
 
   ### angry phase pretrain
-  # factor_lr: 0.0005
-  # lr: 0.003
+  factor_lr: 0.0005
+  lr: 0.003
 
-  factor_lr: [0.0003, 0.0005, 0.001, 0.003]
-  lr: [0.0003, 0.0005, 0.001, 0.003]
+  # factor_lr: [0.0003, 0.0005, 0.001, 0.003]
+  # lr: [0.0003, 0.0005, 0.001, 0.003]
   # weight_decay: [0, 0.001, 0.005, 0.01]
 
 scheduler:
@@ -36,17 +36,16 @@ run:
   n_epochs: 50
   model_path_dir: './tt_models/'
   patience: 20
-  random_state: 42
+  random_state: 0
 
 pretrain:
   model_path: null
 
   # model_path: /home/yequan_zhao/Project/ONN/tonn_fusion/fusion/tt_runs/3281220/best_model.pt
-  # # model_path: /home/yequan_zhao/Project/ONN/tonn_fusion/fusion/tt_runs/425860/best_model.pt
   # mode: weight
 
-  # model_path: /home/yequan_zhao/Project/ONN/tonn_fusion/fusion/tt_runs/3383126/best_model.pt
-  # mode: phase
+  model_path: /home/yequan_zhao/Project/ONN/tonn_fusion/fusion/tt_runs/3383126/best_model.pt
+  mode: phase
 
 model:
   name: TOMFUN
@@ -104,16 +103,16 @@ quantize:
 noise:
   phase_noise_std: 0
 
-  # phase_bias: 1
-  # # phase_bias: [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1]
-  # gamma_noise_std: 0
-  # # gamma_noise_std: [0,0.001,0.002,0.003,0.004,0.005,0.006,0.007,0.008,0.009,0.01]
-  # # crosstalk_factor: 0
-  # crosstalk_factor: [0,0.001,0.002,0.003,0.004,0.005,0.006,0.007,0.008,0.009,0.01]
+  phase_bias: 0
+  # phase_bias: [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1]
+  gamma_noise_std: 0
+  # gamma_noise_std: [0,0.001,0.002,0.003,0.004,0.005,0.006,0.007,0.008,0.009,0.01]
+  # crosstalk_factor: 0
+  crosstalk_factor: [0,0.001,0.002,0.003,0.004,0.005,0.006,0.007,0.008,0.009,0.01]
 
-  phase_bias: 1
-  gamma_noise_std: 0.01
-  crosstalk_factor: 0.01
+  # phase_bias: 1
+  # gamma_noise_std: 0.002
+  # crosstalk_factor: 0.005
 
 ic: # identity calibration
   alg: zcd # [zgd, ztp, zcd]
