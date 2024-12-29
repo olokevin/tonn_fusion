@@ -119,11 +119,10 @@ def main(options):
     params['learning_rate'] = [configs.optimizer.lr, ] if type(configs.optimizer.lr) is not list else configs.optimizer.lr
     params['weight_decay'] = [configs.optimizer.weight_decay, ] if type(configs.optimizer.weight_decay) is not list else configs.optimizer.weight_decay
     
-    if args.test_only:
-        params['random_state'] = [configs.run.random_state, ] if type(configs.run.random_state) is not list else configs.run.random_state
-        params['phase_bias'] = [configs.noise.phase_bias, ] if type(configs.noise.phase_bias) is not list else configs.noise.phase_bias
-        params['gamma_noise_std'] = [configs.noise.gamma_noise_std, ] if type(configs.noise.gamma_noise_std) is not list else configs.noise.gamma_noise_std
-        params['crosstalk_factor'] = [configs.noise.crosstalk_factor, ] if type(configs.noise.crosstalk_factor) is not list else configs.noise.crosstalk_factor
+    params['random_state'] = [configs.run.random_state, ] if type(configs.run.random_state) is not list else configs.run.random_state
+    params['phase_bias'] = [configs.noise.phase_bias, ] if type(configs.noise.phase_bias) is not list else configs.noise.phase_bias
+    params['gamma_noise_std'] = [configs.noise.gamma_noise_std, ] if type(configs.noise.gamma_noise_std) is not list else configs.noise.gamma_noise_std
+    params['crosstalk_factor'] = [configs.noise.crosstalk_factor, ] if type(configs.noise.crosstalk_factor) is not list else configs.noise.crosstalk_factor
 
     import itertools
     # total_settings = total(params)
@@ -149,11 +148,10 @@ def main(options):
         batch_sz = setting['batch_size']
         decay = setting['weight_decay']
         
-        if args.test_only:  
-            configs.run.random_state = setting['random_state']
-            configs.noise.phase_bias = setting['phase_bias']
-            configs.noise.gamma_noise_std = setting['gamma_noise_std']
-            configs.noise.crosstalk_factor = setting['crosstalk_factor']
+        configs.run.random_state = setting['random_state']
+        configs.noise.phase_bias = setting['phase_bias']
+        configs.noise.gamma_noise_std = setting['gamma_noise_std']
+        configs.noise.crosstalk_factor = setting['crosstalk_factor']
 
         # ahid = random.choice(params['audio_hidden'])
         # vhid = random.choice(params['video_hidden'])
@@ -369,7 +367,8 @@ def main(options):
 
                 with open(configs.output_path, 'a+') as out:
                     writer = csv.writer(out)
-                    writer.writerow([batch_sz, round(factor_lr, 4), round(lr, 4), round(decay, 3), round(acc_score, 4), round(f1,4)])
+                    # writer.writerow([batch_sz, round(factor_lr, 4), round(lr, 4), round(decay, 3), round(acc_score, 4), round(f1,4)])
+                    writer.writerow([round(f1,4),])
 
 
 if __name__ == "__main__":

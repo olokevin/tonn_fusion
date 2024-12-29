@@ -20,11 +20,11 @@ optimizer:
   # lr: 0.003
 
   ### angry phase pretrain
-  # factor_lr: 0.0005
-  # lr: 0.003
+  factor_lr: 0.0005
+  lr: 0.003
 
-  factor_lr: [0.0003, 0.0005, 0.001, 0.003]
-  lr: [0.0003, 0.0005, 0.001, 0.003]
+  # factor_lr: [0.0003, 0.0005, 0.001, 0.003]
+  # lr: [0.0003, 0.0005, 0.001, 0.003]
   # weight_decay: [0, 0.001, 0.005, 0.01]
 
 scheduler:
@@ -44,18 +44,18 @@ pretrain:
   # model_path: /home/yequan_zhao/Project/ONN/tonn_fusion/fusion/tt_runs/3281220/best_model.pt
   # mode: weight
 
-  # model_path: /home/yequan_zhao/Project/ONN/tonn_fusion/fusion/tt_runs/3383126/best_model.pt
-  # mode: phase
+  model_path: /home/yequan_zhao/Project/ONN/tonn_fusion/fusion/tt_runs/3383126/best_model.pt
+  mode: phase
 
 model:
   name: TOMFUN
-  mzi_noise: False
-  # mzi_noise: True
+  # mzi_noise: False
+  mzi_noise: True
 
   miniblock: 8
-  mode: "weight"
+  # mode: "weight"
   # mode: "usv"
-  # mode: "phase"
+  mode: "phase"
   act_thres: 2.0
 
   input_dims: [80,36,300,20]
@@ -87,15 +87,15 @@ model:
   
   # TT_FUSION: False
   TT_FUSION: True
-  TT_FUSION_rank: 2
+  TT_FUSION_rank: 4
 
   # TT_SUBNET: False
   TT_SUBNET: True
-  TT_SUBNET_rank: 2
+  TT_SUBNET_rank: 4
   tensor_type: 'TTM'
 
 quantize:
-  w_bit: 32
+  w_bit: 6
   in_bit: 32
   v_pi: 4.36
   v_max: 10.8
