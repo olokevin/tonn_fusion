@@ -1,8 +1,11 @@
-## Dependencies
+# TOMFuN: A Tensorized Optical Multimodal Fusion Network
 
+## Dependencies
 * Python >= 3.6
+* pyutils >= 0.0.1. See [pyutils](https://github.com/JeremieMelo/pyutility) for installation.
+* pytorch-onn >= 0.0.1. See [pytorch-onn](https://github.com/JeremieMelo/pytorch-onn) for installation.
 * Python libraries listed in `requirements.txt`
-* NVIDIA GPUs and CUDA >= 11.5
+* NVIDIA GPUs and CUDA >= 10.2
 
 ## Data for Experiments
 

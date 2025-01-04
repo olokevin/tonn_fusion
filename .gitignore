@@ -23,6 +23,7 @@ fusion/tt_runs/
 fusion/models/
 fusion/results/
 
+fusion/configs/dev
 fushion/run.sh
 fusion/plot.ipynb
 
