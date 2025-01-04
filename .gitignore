@@ -24,7 +24,7 @@ fusion/models/
 fusion/results/
 
 fusion/configs/dev
-fushion/run.sh
+fusion/run.sh
 fusion/plot.ipynb
 
 # C extensions
