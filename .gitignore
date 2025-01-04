@@ -23,6 +23,9 @@ fusion/tt_runs/
 fusion/models/
 fusion/results/
 
+fushion/run.sh
+fusion/plot.ipynb
+
 # C extensions
 *.so
 

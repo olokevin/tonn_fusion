@@ -12,6 +12,9 @@ CUDA_VISIBLE_DEVICES=1 nohup python -u train_iemocap.py configs/TOMFUN.yml >/dev
 
 CUDA_VISIBLE_DEVICES=1 python train_iemocap.py configs/TOMFUN_test.yml --test_only
 
+CUDA_VISIBLE_DEVICES=1 python train_iemocap.py configs/inference/offline.yml --test_only
+CUDA_VISIBLE_DEVICES=1 python train_iemocap.py configs/inference/noise_aware_offline.yml --test_only
+
 
 # python train_iemocap_old.py configs/LMF.yml 
 python train_iemocap_old.py configs/TT_LMF.yml

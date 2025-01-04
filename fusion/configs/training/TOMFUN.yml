@@ -1,0 +1,85 @@
+dataset:
+  name: iemocap
+  dataset_dir: './data/'
+  emotion: angry # happy, sad, angry, neutral
+  classes: 2
+  batch_size: 64
+  num_workers: 4
+  shuffle: True
+
+criterion:
+  name: ce
+
+optimizer:
+  name: adam
+
+  weight_decay: 0
+  factor_lr: [0.0003, 0.0005, 0.001, 0.003]
+  lr: [0.0003, 0.0005, 0.001, 0.003]
+
+scheduler:
+  name: cosine
+  lr_gamma: 0.99
+  lr_min: 0  
+
+run:
+  n_epochs: 50
+  model_path_dir: './tt_models/'
+  patience: 20
+  random_state: 42
+
+pretrain:
+  model_path: null
+
+model:
+  name: TOMFUN
+  mzi_noise: False
+  # mzi_noise: True
+
+  miniblock: 8
+  mode: "weight"
+  act_thres: 2.0
+
+  input_dims: [80,36,300,20]
+  hidden_dims: [32,32,64]
+  FUSION_TYPE: 'replace'
+  sub_out_dims: [32,32,64]
+  dropouts: [0.3,0.1,0.15,0.5]
+  output_dim: 2
+  rank: 8
+
+  # TT_ATTN: False
+  TT_ATTN: True
+  n_layers: 2
+  n_head: 3
+  ATTN_rank: 2
+  
+  # TT_FUSION: False
+  TT_FUSION: True
+  TT_FUSION_rank: 2
+
+  # TT_SUBNET: False
+  TT_SUBNET: True
+  TT_SUBNET_rank: 2
+  tensor_type: 'TTM'
+
+quantize:
+  w_bit: 32
+  in_bit: 32
+  v_pi: 4.36
+  v_max: 10.8
+
+noise:
+  phase_noise_std: 0
+
+  phase_bias: 0
+  gamma_noise_std: 0
+  crosstalk_factor: 0
+  
+ic: # identity calibration
+  alg: zcd # [zgd, ztp, zcd]
+  adaptive: 1
+  best_record: 1
+
+sl: # subspace learning
+  noisy_identity: 0
